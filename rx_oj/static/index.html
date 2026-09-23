@@ -66,9 +66,9 @@
           </div>
           <div class="metrics" id="metrics">
             <article>
-              <span class="metric-label">Available tests <span>↗</span></span
+              <span class="metric-label">Available checks <span>↗</span></span
               ><strong id="metric-total">—</strong
-              ><small>Official & custom manifests</small>
+              ><small>Across all four stages</small>
             </article>
             <article>
               <span class="metric-label">Semantic analysis <span>01</span></span
@@ -76,12 +76,17 @@
               ><small>Acceptance & diagnostic checks</small>
             </article>
             <article>
-              <span class="metric-label">Code generation <span>02</span></span
+              <span class="metric-label">LLVM IR <span>02</span></span
+              ><strong id="metric-ir">—</strong
+              ><small>IR → Clang → output correctness</small>
+            </article>
+            <article>
+              <span class="metric-label">Code generation <span>03</span></span
               ><strong id="metric-codegen">—</strong
               ><small>Assembly & output correctness</small>
             </article>
             <article>
-              <span class="metric-label">Optimization <span>03</span></span
+              <span class="metric-label">Optimization <span>04</span></span
               ><strong id="metric-optimization">—</strong
               ><small>Correctness & REIMU cycles</small>
             </article>
@@ -182,6 +187,7 @@
                 <label for="suite">Test suite</label>
                 <select id="suite" name="suite" required>
                   <option value="semantic">Semantic analysis</option>
+                  <option value="ir">LLVM IR</option>
                   <option value="codegen">Code generation</option>
                   <option value="optimization">Optimization</option>
                 </select>
@@ -191,6 +197,10 @@
                 </p>
                 <p class="field-help">
                   Include <code>config.mk</code> at the repository root.
+                  <code>IR</code> writes LLVM <code>.ll</code>;
+                  <code>CODEGEN</code> writes RV32IM <code>.s</code>.
+                  <code>BUILD</code> can write shared runtime assembly to
+                  <code>{runtime}</code>.
                 </p>
                 <button class="button primary" id="submit-button" type="submit">
                   Submit for judging <span>→</span>

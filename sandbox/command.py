@@ -29,8 +29,12 @@ def main():
             return 0
         sys.stderr.write(f"config.mk must define {stage.upper()}.\n")
         return 125
-    paths = {"source": "/case/input.rx", "output": "/output/program.s"}
-    command = re.sub(r"\{(source|output)\}", lambda m: shlex.quote(paths[m[1]]), command)
+    paths = {
+        "source": "/case/input.rx",
+        "output": "/output/program.ll" if stage == "ir" else "/output/program.s",
+        "runtime": "/output/runtime.s",
+    }
+    command = re.sub(r"\{(source|output|runtime)\}", lambda m: shlex.quote(paths[m[1]]), command)
     # exec replaces this adapter so Docker sees the compiler's exit status, including 1.
     os.execv("/bin/sh", ["sh", "-c", command])
 

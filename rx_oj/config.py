@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parent.parent
 class Settings:
     data_dir: Path = field(default_factory=lambda: Path(os.getenv("OJ_DATA_DIR", ROOT / "data")))
     tests_dir: Path = field(
-        default_factory=lambda: Path(os.getenv("OJ_TESTS_DIR", ROOT.parent / "rx-compiler/tests"))
+        default_factory=lambda: Path(os.getenv("OJ_TESTS_DIR", ROOT / "testcases"))
     )
     languages_file: Path = field(
         default_factory=lambda: Path(os.getenv("OJ_LANGUAGES_FILE", ROOT / "languages.toml"))
@@ -30,6 +30,7 @@ class Settings:
     runtime_image: str = field(
         default_factory=lambda: os.getenv("OJ_RUNTIME_IMAGE", "rx-oj-reimu:local")
     )
+    ir_image: str = field(default_factory=lambda: os.getenv("OJ_IR_IMAGE", "rx-oj-clang:local"))
     docker_runtime: str | None = field(
         default_factory=lambda: os.getenv("OJ_DOCKER_RUNTIME") or None
     )

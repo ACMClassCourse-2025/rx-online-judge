@@ -73,10 +73,15 @@ def test_links_and_zip_duplicates_rejected():
 
 def test_catalog_cumulative_contract(settings):
     catalog = Catalog(settings.tests_dir)
-    assert len(catalog.cases) == 4
+    assert len(catalog.cases) == 5
     assert len(catalog.select_suite("semantic")) == 2
-    assert len(catalog.select_suite("codegen")) == 3
-    assert len(catalog.select_suite("optimization")) == 4
+    assert len(catalog.select_suite("ir")) == 3
+    assert len(catalog.select_suite("codegen")) == 4
+    assert len(catalog.select_suite("optimization")) == 5
+    ir = next(case for case in catalog.cases.values() if case.stage == "ir")
+    codegen = next(case for case in catalog.cases.values() if case.stage == "codegen")
+    assert ir.source == codegen.source and ir.io == codegen.io
+    assert ir.id != codegen.id
     for suite in ("all", "official:smoke", "semantic,codegen"):
         with pytest.raises(ValueError):
             catalog.select_suite(suite)

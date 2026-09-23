@@ -294,7 +294,7 @@ h1 > span {
 }
 .metrics {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 15px;
   margin-bottom: 30px;
 }
@@ -812,6 +812,7 @@ dialog h2 {
     gap: 17px;
   }
   .metrics {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 10px;
   }
   .metrics article {

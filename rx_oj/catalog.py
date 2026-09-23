@@ -5,7 +5,8 @@ from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 
-STAGES = ("semantic", "codegen", "optimization")
+STAGES = ("semantic", "ir", "codegen", "optimization")
+MANIFEST_STAGES = ("semantic", "codegen", "optimization")
 
 
 @dataclass(frozen=True)
@@ -32,7 +33,9 @@ class Catalog:
     def __init__(self, root: Path):
         root = root.resolve()
         self.cases: dict[str, Case] = {}
-        digest = hashlib.sha256()
+        digest = hashlib.sha256(
+            b"rx-oj-catalog-v3:semantic,ir,codegen,optimization:runtime.s:clang22\0"
+        )
         allowed = {"source", "stage", "compilation_success", "io", "description", "metadata"}
         for manifest in sorted(root.rglob("manifest.json")):
             entries = json.loads(manifest.read_text())
@@ -47,7 +50,7 @@ class Catalog:
                     raise ValueError(f"{manifest}: invalid testcase fields")
                 stage = entry.get("stage")
                 success = entry.get("compilation_success")
-                if stage not in STAGES or type(success) is not bool:
+                if stage not in MANIFEST_STAGES or type(success) is not bool:
                     raise ValueError(f"{manifest}: invalid stage or compilation_success")
                 if not isinstance(entry.get("description", ""), str):
                     raise ValueError(f"{manifest}: description must be a string")
@@ -77,6 +80,12 @@ class Catalog:
                 self.cases[case_id] = Case(
                     case_id, suite, source, stage, success, tuple(io), entry.get("description", "")
                 )
+                if stage == "codegen":
+                    # One manifest supplies identical fixtures for both compiler interfaces.
+                    ir_id = f"{suite}/{entry['source']}@ir"
+                    self.cases[ir_id] = Case(
+                        ir_id, suite, source, "ir", success, tuple(io), entry.get("description", "")
+                    )
                 paths = [source, *(p for pair in io for p in pair if p is not None)]
                 for path in paths:
                     digest.update(path.relative_to(root).as_posix().encode())
@@ -87,7 +96,7 @@ class Catalog:
 
     def select_suite(self, suite: str) -> list[Case]:
         if suite not in STAGES:
-            raise ValueError("Choose semantic, codegen, or optimization")
+            raise ValueError("Choose semantic, ir, codegen, or optimization")
         included = STAGES[: STAGES.index(suite) + 1]
         # Order whole stages explicitly; filesystem ordering is not grading order.
         if any(not any(case.stage == stage for case in self.cases.values()) for stage in included):

@@ -9,27 +9,50 @@ suite. The judge fetches the source, builds the compiler, and runs Rx tests in c
 
 ## Suite progression
 
-There are exactly three selectable suites. Later suites always include all earlier suites,
-with execution ordered semantic → codegen → optimization:
+There are four selectable suites. Later suites always include all earlier suites,
+with execution ordered semantic → IR → codegen → optimization:
 
 | Selected suite | What runs | Current official test count |
 |---|---|---:|
 | Semantic | Every semantic testcase | 236 |
-| Code generation | Every semantic and codegen testcase | 296 |
-| Optimization | Every semantic, codegen, and optimization testcase | 309 |
+| LLVM IR | Every semantic testcase, then all 60 codegen fixtures through `IR` | 296 |
+| Code generation | Semantic + IR, then the same 60 fixtures through `CODEGEN` | 356 |
+| Optimization | Semantic + IR + codegen, then all 13 optimization testcases | 369 |
 
-Counts come from the configured manifests; they are not hardcoded into grading.
+IR and codegen share source files and input/output pairs. The catalog derives an IR
+check from each codegen manifest entry; no duplicate fixtures or manifest changes are
+needed. Counts come from the configured manifests; they are not hardcoded into grading.
 There is no per-testcase or directory filter, and the API rejects extra selection fields.
 All selected tests run even if an earlier test fails. A submission is accepted only if
 all tests pass. Per-case diagnostics remain visible for debugging.
+
+Official testcases are pinned in this repository's `testcases/official` Git submodule:
+[ACMClassCourse-2025/rx-compiler-testcases](https://github.com/ACMClassCourse-2025/rx-compiler-testcases).
+The judge loads manifests from `./testcases`; Compose mounts this directory read-only
+at `/tests` for the API, worker, and baseline generator. Initialize it with `make init`
+or `git submodule update --init --recursive` after cloning. The `tests/` directory
+contains the judge's own automated tests and smoke fixtures.
+
+To update to a newer official testcase revision:
+
+```sh
+git submodule update --remote testcases/official
+git add testcases/official
+git commit -m "Update official testcases"
+docker compose restart api worker
+make baseline
+```
+
+The committed submodule revision makes deployments reproducible. Changes to testcase
+contents change the catalog fingerprint, so submissions must run again against that catalog.
 
 ## Optimization leaderboard
 
 ![Optimization leaderboard](docs/leaderboard.png)
 
 The **Leaderboard** page ranks active accounts by their best fully accepted optimization
-submission against the current test catalog. Every semantic and codegen testcase must pass
-too. Each account has one entry; lower scores rank higher, and equal scores share a rank.
+submission against the current test catalog. Every semantic, IR, and codegen testcase must pass
+too. Optimization cases use `CODEGEN`, so the scored assembly is produced by the submission. Each account has one entry; lower scores rank higher, and equal scores share a rank.
 For equally scoring submissions from one account, the earliest completed one is shown.
 All signed-in accounts can see the rankings and expand scores to inspect testcase ratios.
 Submission diagnostics remain accessible only to the owner and administrators.
@@ -61,10 +84,11 @@ make baseline
 docker compose run --rm --no-deps baseline
 ```
 
-This uses the official Rust toolchain in the configured `rust` language image, the
-reference helpers and `config.mk` from `../rx-compiler`, and the judge's trusted REIMU
-image. Set `RX_REFERENCE_PATH` for a different reference checkout. Compilation and
-execution use the same offline containers, limits, inputs, and correctness checks as
+This uses the official Rust toolchain in the configured `rust` language image, testcases
+from this repository's `testcases/official` submodule, the reference helpers and `config.mk`
+from `../rx-compiler`, and the judge's trusted REIMU image. Set `RX_REFERENCE_PATH` for a
+different reference checkout. Compilation and execution use the same offline containers,
+limits, inputs, and correctness checks as
 submissions. The baseline job measures optimization tests only; student submissions
 still run the complete cumulative suite.
 
@@ -98,21 +122,25 @@ and sibling checkouts:
 
 ```text
 Compiler/
-├── rx-compiler/        # tests/official and vendor/REIMU submodules initialized
+├── rx-compiler/        # Reference compiler helpers and vendor/REIMU
 └── rx-online-judge/
+    └── testcases/
+        └── official/   # This judge's pinned testcase submodule
 ```
 
 From `rx-online-judge`:
 
 ```sh
-git -C ../rx-compiler submodule update --init --recursive
-python3 scripts/setup.py
+make init
+git -C ../rx-compiler submodule update --init --recursive vendor/REIMU
 python3 scripts/build_images.py
 docker compose up --build -d
 ```
 
 The dashboard is at **http://localhost:8000**. The API binds to loopback by default.
 Create accounts before signing in; there is no default password or web registration.
+`make init` also migrates the previous generated `RX_TESTS_PATH` setting to `./testcases`
+in an existing `.env`, while preserving other settings and custom testcase paths.
 
 ## Accounts and administration
 
@@ -175,28 +203,41 @@ file symlinks, such as the template's README link, are materialized safely insid
 source archive. Directory, dangling, cyclic, and escaping links are rejected. Source
 archives are never extracted onto the host.
 
-The existing reference compiler can be submitted directly:
+The reference compiler repository is:
 
 ```text
 https://github.com/ACMClassCourse-2025/rx-compiler.git
 ```
 
-Select **Rust**; its original `config.mk` is supported.
+Select **Rust** and use a revision whose `config.mk` defines `IR` for any suite beyond
+Semantic. Older revisions without `IR` can still submit the Semantic suite.
 
 ## Compiler contract
 
 ```make
-BUILD = g++ -std=c++23 -O2 src/main.cpp -o compiler
+BUILD = g++ -std=c++23 -O2 src/main.cpp -o compiler && cp runtime.s {runtime}
 SEMANTIC = ./compiler --stage semantic {source}
+IR = ./compiler --stage ir {source} -o {output}
 CODEGEN = ./compiler --stage codegen {source} -o {output}
 ```
 
 - `BUILD` runs once and may be empty. `/workspace` is snapshotted after building.
+  `{runtime}` points to an initially empty assembly file outside that snapshot. `BUILD`
+  may copy or generate shared runtime assembly there; the judge captures its bytes when
+  the build succeeds. Leave it empty if the compiler embeds its runtime in each program.
 - `SEMANTIC` exits **0** to accept and **1** to reject. Other exits, signals, and timeouts
   fail even negative testcases.
-- `CODEGEN` exits 0 and writes **self-contained RV32IM assembly** to `{output}`. Include any
-  compiler runtime assembly in that file.
-- `{source}` and `{output}` are substituted as shell-quoted absolute paths. Make variable
+- `IR` exits 0 and writes LLVM IR to `{output}` (`.ll`), compatible with **Clang 22**.
+  The judge lowers it to RV32IM assembly in a separate trusted Clang container.
+- `CODEGEN` exits 0 and writes RV32IM assembly to `{output}` (`.s`).
+- Both outputs may call symbols defined in the runtime from `BUILD`. Runtime assembly
+  must use RV32IM and the ILP32 calling convention, with globals for exported functions.
+  Programs must define a global `main`; REIMU also supplies its supported libc functions.
+- The runtime must remain a regular file, at most 8 MiB (the artifact limit). Empty is valid;
+  missing files, symlinks, directories, and oversized files fail the build. The captured
+  runtime is supplied unchanged to every IR, codegen, and optimization execution.
+  Changes to `{runtime}` during testcase compilation do not affect execution.
+- `{source}`, `{output}`, and `{runtime}` are substituted as shell-quoted absolute paths. Make variable
   expansion is supported. Commands run in `/workspace`.
 - The worker always runs its trusted REIMU image; a submission's `RUN` command is ignored.
 - Outputs must match every input/output pair byte-for-byte, including final newlines.
@@ -204,11 +245,27 @@ CODEGEN = ./compiler --stage codegen {source} -o {output}
   passing optimization cases.
 - `lex` and `parse` manifests are skipped, matching the compiler template.
 
-Implementation images support C/C++ (GCC 14), Rust 1.90 with the RV32IM target, Python 3.13,
+The fixed IR lowering command is:
+
+```sh
+clang-22 -S -x ir /case/program.ll -o /output/program.s \
+  --target=riscv32-unknown-none-elf -march=rv32im -mabi=ilp32 \
+  -O0 -mllvm -riscv-no-aliases
+```
+
+The judge removes DWARF `.debug_*` sections that REIMU cannot assemble, then executes
+`reimu -f /case/program.s,/case/runtime.s` with judge-controlled input/output paths and
+limits. Only emitted IR enters the Clang container. Student build scripts and Make
+expressions execute in the language sandbox; neither repository `RUN` nor repository
+Clang commands control judging. LLVM IR compilation errors appear in case diagnostics.
+
+Implementation images support C/C++ (GCC 14), Rust 1.95 with the RV32IM target, Python 3.13,
 Java 21, and Node.js 22. Build and execution containers have no network access; vendor
 all dependencies or install them in operator-owned images. The tiny compilers in
 `examples/python` and `examples/cpp` support only `tests/fixtures/suites` for installation
-checks; they are not complete Rx compilers.
+checks; they are not complete Rx compilers. Both demonstrate a shared runtime function
+called from LLVM IR and direct assembly. The Rust reference embeds its runtime with
+LTO and leaves `{runtime}` empty.
 
 ## Architecture and limits
 
@@ -221,13 +278,17 @@ flowchart LR
   Git --> Source[Source snapshot + commit SHA]
   Source --> Build[Offline language container: build]
   Build --> Compile[Fresh offline compiler container per case]
-  Compile --> REIMU[Fresh offline REIMU container per input]
+  Build --> Runtime[Captured runtime.s]
+  Compile -->|IR: .ll| Clang[Trusted Clang 22 container]
+  Compile -->|CODEGEN: .s| REIMU[Fresh offline REIMU container per input]
+  Clang -->|.s| REIMU
+  Runtime --> REIMU
   REIMU --> Worker
 ```
 
 Only the trusted worker has Docker access. Git fetching occurs in a separate container
 that has networking but no host mounts or credentials and never executes repository code.
-Compiler and REIMU containers cannot access the network, Docker socket, database, host
+Compiler, Clang, and REIMU containers cannot access the network, Docker socket, database, host
 directories, or expected test outputs. Grading happens in the worker.
 
 Sandboxes run as UID 1000 with a read-only root filesystem, bounded tmpfs mounts, all
@@ -243,7 +304,7 @@ capabilities dropped, no-new-privileges, default Docker seccomp, and cgroup limi
 | Total submission timeout | 1 hour |
 | Compiler and Git / REIMU memory | 1,024 / 512 MiB |
 | CPU / process limit | 1 CPU / 64 processes |
-| Generated assembly / program output | 8 MiB / 1 MiB |
+| Generated IR, assembly, or runtime / program output | 8 MiB / 1 MiB |
 | Captured diagnostics | 64 KiB per command |
 | Queued + active submissions | 100 |
 
@@ -264,7 +325,8 @@ retention policy and backups for sustained use. Docker shares the host kernel; u
 worker machines and an isolation runtime such as gVisor for public, hostile submissions.
 
 Configuration: `OJ_DATA_DIR`, `OJ_TESTS_DIR`, `OJ_LANGUAGES_FILE`, `OJ_SECURE_COOKIES`,
-`OJ_GIT_HOSTS`, `OJ_GIT_IMAGE`, `OJ_RUNTIME_IMAGE`, and `OJ_DOCKER_RUNTIME`.
+`OJ_GIT_HOSTS`, `OJ_GIT_IMAGE`, `OJ_IR_IMAGE`, `OJ_RUNTIME_IMAGE`, and `OJ_DOCKER_RUNTIME`.
+`OJ_IR_IMAGE` defaults to `rx-oj-clang:local`, built by `scripts/build_images.py`.
 `OJ_DOCKER_RUNTIME=runsc` uses an already-installed gVisor runtime. Compose also supports
 `OJ_PORT`, `RX_TESTS_PATH`, `OJ_DOCKER_SOCKET`, and `OJ_DOCKER_GID`. For rootless Docker,
 set `OJ_DOCKER_SOCKET` before running setup.
@@ -280,7 +342,7 @@ POST requests other than login require `X-CSRF-Token`, returned by login and `/a
 | GET | `/api/auth/me` | Current account and CSRF token |
 | POST | `/api/auth/logout` | Revoke current session |
 | POST | `/api/auth/password` | Change password; revoke all sessions |
-| GET | `/api/catalog` | Three cumulative suites, counts, allowed Git hosts |
+| GET | `/api/catalog` | Four cumulative suites, counts, allowed Git hosts |
 | GET | `/api/languages` | Allowed compiler implementation languages |
 | GET | `/api/health` | Worker connectivity and queue depth |
 | GET | `/api/leaderboard` | Account rankings, active baseline, and testcase cycle ratios |
@@ -301,7 +363,7 @@ Submission JSON:
 }
 ```
 
-`git_ref` defaults to `HEAD`; `suite` must be `semantic`, `codegen`, or `optimization`.
+`git_ref` defaults to `HEAD`; `suite` must be `semantic`, `ir`, `codegen`, or `optimization`.
 Extra fields such as `filter`, `stage`, and `case_ids` are rejected. Other users' submissions
 return 404 to students. `source_error` indicates a repository fetch/ref/source-layout problem;
 `build_error` indicates a compiler build failure. Other terminal states include `accepted`,
@@ -313,6 +375,18 @@ the active baseline at read time. Each ranked entry includes `rank`, `username`,
 and `ratio`. `optimization_score` in submission details is `null` when the submission or
 baseline is ineligible. Leaderboard visibility does not grant access to another account's
 submission details or cancellation endpoint.
+
+## Upgrade for IR and runtime support
+
+Rebuild sandbox images with `python3 scripts/build_images.py`, then rebuild and restart
+the API and worker. Add `IR` to submission repositories and use `{runtime}` in `BUILD`
+when a separate runtime is needed. The new grading contract changes the catalog
+fingerprint: old results remain visible but cannot rank against the new catalog.
+Run `make baseline` again and resubmit compilers to qualify for the leaderboard.
+
+The Clang 22 upgrade pairs LLVM IR lowering with the Rust 1.95 reference toolchain
+(LLVM 22). It also changes the catalog fingerprint, so Clang 20 results remain historical.
+Rebuild the images and regenerate the Rust baseline when upgrading from that version.
 
 ## Upgrade from the shared-token version
 
@@ -326,20 +400,21 @@ using the CLI after deploying the new version; existing accounts are never repla
 
 ```sh
 uv sync --frozen
+make init
 uv run python -m rx_oj.admin create-user admin --admin
 make dev
 # Separate terminal:
 make worker
 ```
 
-Development uses `./data` and `../rx-compiler/tests`; accounts are required here too.
+Development uses `./data` and `./testcases`; accounts are required here too.
 For smoke fixtures, use `OJ_TESTS_DIR=tests/fixtures/suites` for both API and worker.
 The frontend has no build step or CDN dependency.
 
 ```sh
 make lint
 make test
-make test-docker             # Requires python, cpp, and REIMU images
+make test-docker             # Requires Python, C++, Rust, Clang, and REIMU images
 OJ_TEST_DOCKER=1 OJ_TEST_GIT_NETWORK=1 uv run pytest -q
 # The opt-in network test additionally uses Git and Rust images and public GitHub access.
 ```
@@ -347,8 +422,10 @@ OJ_TEST_DOCKER=1 OJ_TEST_GIT_NETWORK=1 uv run pytest -q
 Tests cover accounts, password resets, expiry, CSRF, ownership, administrator access,
 login throttling, migration, Git URL/ref validation, cumulative suites, queue concurrency,
 geometric-mean scoring, baseline selection, ranking ties, score visibility, and container
-execution. The opt-in network test submits the public Rx reference repo
-through login, Git fetch, build, all three smoke suites, and REIMU cycle collection.
+execution, separate IR lowering, and immutable shared runtime artifacts. The opt-in
+network test submits the public Rx reference repository through login, Git fetch, build,
+and semantic checking. Container tests exercise all four cumulative stages using the
+examples and check the sibling Rust reference through both IR and codegen.
 
 Add language images and their IDs to `languages.toml` to extend toolchain support.
 Images need `/bin/sh`, `sleep`, `tar`, Python 3, GNU Make, the language toolchain, and

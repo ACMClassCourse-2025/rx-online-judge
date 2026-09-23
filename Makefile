@@ -1,6 +1,7 @@
 .PHONY: init images up down dev worker baseline test test-docker lint
 
 init:
+	git submodule update --init --recursive
 	python3 scripts/setup.py
 
 images:

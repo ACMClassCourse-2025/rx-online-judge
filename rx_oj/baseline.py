@@ -32,11 +32,14 @@ def reference_files(reference: Path):
 def variant_source(files, level):
     if level not in OPT_LEVELS:
         raise ValueError("Unsupported Rust optimization level")
-    config, count = re.subn(
-        r"-C\s+opt-level=[0123sz]\b", f"-C opt-level={level}", files["config.mk"].decode()
-    )
+    config = files["config.mk"].decode()
+    codegen = re.search(r"(?m)^CODEGEN[ \t]*=[ \t]*(?:[^\n]*\\\n)*[^\n]*", config)
+    if codegen is None:
+        raise ValueError("Reference config.mk must contain a CODEGEN command.")
+    command, count = re.subn(r"-C\s+opt-level=[0123sz]\b", f"-C opt-level={level}", codegen[0])
     if count != 1:
-        raise ValueError("Reference config.mk must contain exactly one -C opt-level setting.")
+        raise ValueError("Reference CODEGEN must contain exactly one -C opt-level setting.")
+    config = config[: codegen.start()] + command + config[codegen.end() :]
     config, count = re.subn(
         r"(?m)^BUILD\s*=\s*", f"BUILD = CARGO_PROFILE_RELEASE_OPT_LEVEL={level} ", config
     )

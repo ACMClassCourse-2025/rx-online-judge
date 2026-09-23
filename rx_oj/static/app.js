@@ -23,9 +23,11 @@ const escapeHTML = (value) =>
       ],
   );
 const label = (value) =>
-  String(value)
-    .replaceAll("_", " ")
-    .replace(/^./, (c) => c.toUpperCase());
+  value === "ir"
+    ? "LLVM IR"
+    : String(value)
+        .replaceAll("_", " ")
+        .replace(/^./, (c) => c.toUpperCase());
 const badge = (value) =>
   `<span class="badge ${escapeHTML(value)}">${escapeHTML(label(value))}</span>`;
 const number = (n) => Number(n).toLocaleString();
@@ -161,7 +163,7 @@ function renderDetail(s) {
   $("detail").innerHTML =
     `<div class="panel-heading"><div><div class="eyebrow">SUBMISSION / ${escapeHTML(s.id.slice(0, 8))}</div><h2>${escapeHTML(s.name)}</h2></div><div class="detail-heading-actions">${badge(s.status)}${!terminal(s.status) ? `<button id="cancel-submission" class="button ghost small" ${s.cancel_requested ? "disabled" : ""}>${s.cancel_requested ? "Cancelling…" : "Cancel run"}</button>` : ""}<button id="close-detail" class="icon-button" aria-label="Close submission details">×</button></div></div>
     <div class="detail-body"><p class="source-info">${escapeHTML(s.repository_url || "Legacy archive submission")}<br>Ref: <code>${escapeHTML(s.git_ref || "—")}</code> · Commit: <code>${escapeHTML(s.commit_sha || "Waiting for Git fetch")}</code></p><div class="detail-summary"><span><strong>${s.passed} / ${s.total}</strong> passed</span><span><strong>${s.completed}</strong> completed</span><span><strong>${number(s.cycles)}</strong> optimization cycles</span><span>${escapeHTML(label(s.stage))} · ${escapeHTML(languageName(s.language))}</span></div>${s.optimization_score ? `<div class="optimization-score"><strong>${scoreText(s.optimization_score.score)}</strong><span>Optimization score · lower is better</span><a href="#leaderboard">View leaderboard ↗</a></div>` : ""}<progress class="detail-progress" value="${s.completed}" max="${s.total}" aria-label="Completed testcases"></progress>
-    ${s.message ? `<p>${escapeHTML(s.message)}</p>` : ""}${!s.results.length ? `<p class="field-help">${s.status === "queued" ? "Waiting for a worker to claim this submission." : s.status === "running" ? "Fetching the repository, building the compiler, and preparing the suite…" : "No testcase results were produced."}</p>` : `<div class="table-scroll" tabindex="0" role="region" aria-label="Testcase results"><table><thead><tr><th>TESTCASE</th><th>VERDICT</th><th>ELAPSED</th><th>CYCLES</th></tr></thead><tbody>${s.results.map((r) => `<tr><td class="case-name">${escapeHTML(r.case_id)}</td><td>${badge(r.verdict)}</td><td>${(r.duration_ms / 1000).toFixed(2)}s</td><td>${r.stage === "optimization" && r.verdict === "accepted" ? number(r.cycles) : "—"}</td></tr>`).join("")}</tbody></table></div>`}
+    ${s.message ? `<p>${escapeHTML(s.message)}</p>` : ""}${!s.results.length ? `<p class="field-help">${s.status === "queued" ? "Waiting for a worker to claim this submission." : s.status === "running" ? "Fetching the repository, building the compiler, and preparing the suite…" : "No testcase results were produced."}</p>` : `<div class="table-scroll" tabindex="0" role="region" aria-label="Testcase results"><table><thead><tr><th>TESTCASE</th><th>STAGE</th><th>VERDICT</th><th>ELAPSED</th><th>CYCLES</th></tr></thead><tbody>${s.results.map((r) => `<tr><td class="case-name">${escapeHTML(r.case_id)}</td><td>${escapeHTML(label(r.stage))}</td><td>${badge(r.verdict)}</td><td>${(r.duration_ms / 1000).toFixed(2)}s</td><td>${r.stage === "optimization" && r.verdict === "accepted" ? number(r.cycles) : "—"}</td></tr>`).join("")}</tbody></table></div>`}
     ${s.optimization_score ? `<details><summary>Optimization score · testcase ratios</summary>${scoreTable(s.optimization_score.cases)}</details>` : ""}
     <details ${s.status === "build_error" ? "open" : ""}><summary>Build diagnostics</summary><pre tabindex="0" role="region" aria-label="Build diagnostics output">${escapeHTML(s.build_log || "No build output.")}</pre></details>
     ${failures.map((r) => `<details><summary>${escapeHTML(r.case_id)} · ${escapeHTML(label(r.verdict))}</summary><p>${escapeHTML(r.message)}</p><pre tabindex="0" role="region" aria-label="Testcase diagnostics output">${escapeHTML(r.log || "No compiler or simulator diagnostics.")}</pre></details>`).join("")}
@@ -237,7 +239,7 @@ async function initialize() {
           `<option value="${escapeHTML(s.id)}">${escapeHTML(label(s.id))} · ${number(s.total)} tests</option>`,
       )
       .join("");
-    for (const stage of ["semantic", "codegen", "optimization"])
+    for (const stage of ["semantic", "ir", "codegen", "optimization"])
       $(`metric-${stage}`).textContent = number(catalog.stages[stage] || 0);
     $("metric-total").textContent = number(catalog.total);
     $("suite").dispatchEvent(new Event("change"));

@@ -68,7 +68,10 @@ def test_full_submission_through_api_worker_and_reimu(
         )
         result = api.get(f"/api/submissions/{job['id']}").json()
         assert result["status"] == "accepted", result
-        assert result["passed"] == 4 and result["cycles"] > 0
+        assert result["passed"] == 5 and result["cycles"] > 0
+        ir = next(r for r in result["results"] if r["stage"] == "ir")
+        assert len(ir["runs"]) == 2 and ir["cycles"] == 0
+        assert "Clang IR lowering:" in ir["log"]
         codegen = next(r for r in result["results"] if r["stage"] == "codegen")
         assert len(codegen["runs"]) == 2
         assert not client.containers.list(
@@ -110,6 +113,9 @@ def test_hardening_limits_and_exit_status(settings, client):
     [
         ("exit 2", "semantic", "compile_error"),
         ("true", "codegen", "artifact_error"),
+        ("true", "ir", "artifact_error"),
+        ("printf invalid > {output}", "ir", "compile_error"),
+        ("cp /workspace/wrong.s {output}", "ir", "compile_error"),
         ("cp /workspace/wrong.s {output}", "codegen", "wrong_answer"),
         ("cp /workspace/broken.s {output}", "codegen", "runtime_error"),
         ("sleep 100", "semantic", "time_limit"),
@@ -125,7 +131,7 @@ def test_failure_verdicts(settings, client, command, stage, verdict):
         lambda: False,
         time.monotonic() + 60,
     )
-    config = f"SEMANTIC = {command}\nCODEGEN = {command}\n".encode()
+    config = f"SEMANTIC = {command}\nIR = {command}\nCODEGEN = {command}\n".encode()
     execution, snapshot = judge.build(
         pack_files(
             {
@@ -151,7 +157,7 @@ def test_public_git_reference_end_to_end(settings, client, accounts, sign_in):
             json={
                 "name": "Public reference",
                 "language": "rust",
-                "suite": "optimization",
+                "suite": "semantic",
                 "repository_url": "https://github.com/ACMClassCourse-2025/rx-compiler.git",
                 "git_ref": "HEAD",
             },
@@ -171,10 +177,87 @@ def test_public_git_reference_end_to_end(settings, client, accounts, sign_in):
         )
         result = api.get(f"/api/submissions/{job['id']}").json()
         assert result["status"] == "accepted", result
-        assert result["passed"] == 4 and len(result["commit_sha"]) == 40
+        # The public template may lag local changes to the IR/runtime contract.
+        # Full runtime coverage uses the local reference and examples below.
+        assert result["passed"] == 2 and len(result["commit_sha"]) == 40
         assert [r["stage"] for r in result["results"]] == [
             "semantic",
             "semantic",
-            "codegen",
-            "optimization",
         ]
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "rm {runtime}",
+        "ln -sf /etc/passwd {runtime}",
+        "rm {runtime} && mkdir {runtime}",
+        "head -c 1000 /dev/zero > {runtime}",
+    ],
+)
+def test_build_runtime_requires_bounded_regular_file(settings, client, command):
+    from rx_oj.sandbox import ArtifactError
+
+    judge = Judge(
+        client,
+        replace(settings, max_artifact_bytes=128),
+        {"id": "test-runtime-artifact"},
+        "rx-oj-python:local",
+        lambda: False,
+        time.monotonic() + 60,
+    )
+    with pytest.raises(ArtifactError):
+        judge.build(pack_files({"config.mk": f"BUILD = {command}\n".encode()}))
+
+
+def test_runtime_is_frozen_at_build_and_shared_by_ir_and_codegen(settings, client):
+    files = {p.name: p.read_bytes() for p in (ROOT / "examples/python").iterdir() if p.is_file()}
+    # Testcase commands may write arbitrary files, but cannot change the captured runtime.
+    config = files["config.mk"].decode()
+    config = "\n".join(
+        line + " && printf broken > {runtime}" if line.startswith(("IR =", "CODEGEN =")) else line
+        for line in config.splitlines()
+    )
+    files["config.mk"] = config.encode()
+    judge = Judge(
+        client,
+        settings,
+        {"id": "test-runtime-frozen"},
+        "rx-oj-python:local",
+        lambda: False,
+        time.monotonic() + 120,
+    )
+    execution, build = judge.build(pack_files(files))
+    assert not execution.code and not execution.limit
+    assert build.runtime == files["runtime.s"]
+    for stage in ("ir", "codegen"):
+        case = next(c for c in Catalog(settings.tests_dir).cases.values() if c.stage == stage)
+        result = judge.case(case, build)
+        assert result["verdict"] == "accepted", result
+        assert len(result["runs"]) == 2
+
+
+def test_rust_reference_ir_and_codegen_with_empty_runtime(settings, client):
+    from rx_oj.baseline import reference_files
+
+    reference = ROOT.parent / "rx-compiler"
+    if not (reference / "config.mk").is_file():
+        pytest.skip("Requires the sibling reference compiler checkout")
+    files = reference_files(reference)
+    if b"IR =" not in files["config.mk"]:
+        pytest.skip("Reference compiler checkout must support the IR command")
+    judge = Judge(
+        client,
+        settings,
+        {"id": "test-reference-ir"},
+        "rx-oj-rust:local",
+        lambda: False,
+        time.monotonic() + 180,
+    )
+    execution, build = judge.build(pack_files(files))
+    assert not execution.code and not execution.limit, execution.log
+    assert build.runtime == b""
+    for stage in ("ir", "codegen"):
+        case = next(c for c in Catalog(settings.tests_dir).cases.values() if c.stage == stage)
+        result = judge.case(case, build)
+        assert result["verdict"] == "accepted", result

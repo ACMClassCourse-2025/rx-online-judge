@@ -42,8 +42,14 @@ def process(db, client, settings, catalog, languages, job, worker_id, stopping):
         # Resolve tags once per submission so builds and cases use exactly the same image.
         image = client.images.get(image).id
         runtime_image = client.images.get(settings.runtime_image).id
+        ir_image = client.images.get(settings.ir_image).id
         judge = Judge(
-            client, replace(settings, runtime_image=runtime_image), job, image, cancelled, deadline
+            client,
+            replace(settings, runtime_image=runtime_image, ir_image=ir_image),
+            job,
+            image,
+            cancelled,
+            deadline,
         )
         source, sha = fetch_repository(client, settings, job, cancelled, deadline)
         db.revision(job_id, worker_id, sha)
@@ -111,6 +117,7 @@ def run_worker(settings, once=False):
                 for key, entry in {
                     **languages,
                     "reimu": {"image": settings.runtime_image},
+                    "clang": {"image": settings.ir_image},
                     "git": {"image": settings.git_image},
                 }.items():
                     try:

@@ -14,7 +14,7 @@ services:
       OJ_GIT_HOSTS: ${OJ_GIT_HOSTS:-github.com,gitlab.com,codeberg.org,gitee.com}
     volumes:
       - judge-data:/data
-      - ${RX_TESTS_PATH:-../rx-compiler/tests}:/tests:ro
+      - ${RX_TESTS_PATH:-./testcases}:/tests:ro
       - ./languages.toml:/app/languages.toml:ro
     read_only: true
     tmpfs:
@@ -32,10 +32,11 @@ services:
     command: ["python", "-m", "rx_oj.worker"]
     environment:
       OJ_DOCKER_RUNTIME: ${OJ_DOCKER_RUNTIME:-}
+      OJ_IR_IMAGE: ${OJ_IR_IMAGE:-rx-oj-clang:local}
       OJ_GIT_HOSTS: ${OJ_GIT_HOSTS:-github.com,gitlab.com,codeberg.org,gitee.com}
     volumes:
       - judge-data:/data
-      - ${RX_TESTS_PATH:-../rx-compiler/tests}:/tests:ro
+      - ${RX_TESTS_PATH:-./testcases}:/tests:ro
       - ./languages.toml:/app/languages.toml:ro
       - ${OJ_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
     depends_on: [api]

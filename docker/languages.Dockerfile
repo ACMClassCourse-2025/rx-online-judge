@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends g++ cmake ninja
     && rm -rf /var/lib/apt/lists/*
 USER 1000:1000
 
-FROM rust:1.90-slim-trixie AS rust-toolchain
+FROM rust:1.95-slim-trixie AS rust-toolchain
 RUN rustup target add riscv32im-unknown-none-elf
 
 FROM cpp AS rust

@@ -15,6 +15,11 @@ parser.add_argument(
 )
 args = parser.parse_args()
 subprocess.run(
+    ["docker", "build", "-f", "docker/clang.Dockerfile", "-t", "rx-oj-clang:local", "."],
+    cwd=root,
+    check=True,
+)
+subprocess.run(
     ["docker", "build", "-f", "docker/git.Dockerfile", "-t", "rx-oj-git:local", "."],
     cwd=root,
     check=True,

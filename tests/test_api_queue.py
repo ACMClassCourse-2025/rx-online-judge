@@ -28,7 +28,7 @@ def test_api_submission_validation_and_cancel(settings, accounts, sign_in):
         assert client.get("/").status_code == 200
         assert client.get("/api/catalog").status_code == 401
         sign_in(client)
-        assert client.get("/api/catalog").json()["total"] == 4
+        assert client.get("/api/catalog").json()["total"] == 5
         assert submit(client, language="untrusted/image").status_code == 422
         assert submit(client, filter="official:smoke").status_code == 422
         assert submit(client, stage="semantic").status_code == 422
@@ -51,8 +51,9 @@ def test_later_suites_always_include_whole_prerequisites(settings, accounts, sig
         sign_in(client)
         expected = {
             "semantic": ["semantic", "semantic"],
-            "codegen": ["semantic", "semantic", "codegen"],
-            "optimization": ["semantic", "semantic", "codegen", "optimization"],
+            "ir": ["semantic", "semantic", "ir"],
+            "codegen": ["semantic", "semantic", "ir", "codegen"],
+            "optimization": ["semantic", "semantic", "ir", "codegen", "optimization"],
         }
         for suite, stages in expected.items():
             job = submit(client, suite=suite).json()

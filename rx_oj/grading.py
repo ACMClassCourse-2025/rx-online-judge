@@ -1,7 +1,15 @@
 import re
 import time
+from dataclasses import dataclass
 
+from .ir import clang_command, strip_debug
 from .sandbox import ArtifactError, Sandbox
+
+
+@dataclass(frozen=True)
+class BuildArtifacts:
+    workspace: bytes
+    runtime: bytes
 
 
 def semantic_verdict(code: int, should_accept: bool):
@@ -29,11 +37,11 @@ class Judge:
         self.submission, self.image = submission, image
         self.cancelled, self.deadline = cancelled, deadline
 
-    def sandbox(self, runtime=False):
+    def sandbox(self, runtime=False, image=None):
         return Sandbox(
             self.client,
             self.settings,
-            self.settings.runtime_image if runtime else self.image,
+            image or (self.settings.runtime_image if runtime else self.image),
             self.submission["id"],
             self.cancelled,
             runtime,
@@ -45,15 +53,17 @@ class Judge:
     def build(self, source):
         with self.sandbox() as sandbox:
             sandbox.put("/workspace", source)
+            sandbox.files("/output", {"runtime.s": b""})
             execution = sandbox.execute(
                 ["python3", "/opt/rx-oj/command.py", "build"],
                 self.timeout(self.settings.build_timeout),
             )
             if execution.limit or execution.code:
                 return execution, None
-            return execution, sandbox.snapshot()
+            runtime = sandbox.read_file("/output/runtime.s", self.settings.max_artifact_bytes)
+            return execution, BuildArtifacts(sandbox.snapshot(), runtime)
 
-    def case(self, case, snapshot):
+    def case(self, case, build):
         start = time.monotonic()
         result = {
             "case_id": case.id,
@@ -71,9 +81,9 @@ class Judge:
 
         try:
             with self.sandbox() as sandbox:
-                sandbox.put("/workspace", snapshot)
+                sandbox.put("/workspace", build.workspace)
                 sandbox.files("/case", {"input.rx": case.source.read_bytes()})
-                stage = "semantic" if case.stage == "semantic" else "codegen"
+                stage = "codegen" if case.stage == "optimization" else case.stage
                 execution = sandbox.execute(
                     ["python3", "/opt/rx-oj/command.py", stage],
                     self.timeout(self.settings.compile_timeout),
@@ -87,9 +97,30 @@ class Judge:
                 elif execution.code:
                     fail("compile_error", f"Compiler exited {execution.code}.")
                 else:
-                    assembly = sandbox.read_file(
-                        "/output/program.s", self.settings.max_artifact_bytes
+                    artifact = sandbox.read_file(
+                        "/output/program.ll" if case.stage == "ir" else "/output/program.s",
+                        self.settings.max_artifact_bytes,
                     )
+            if case.stage == "ir" and result["verdict"] == "accepted":
+                # Only the emitted IR crosses this boundary; repository files and tools do not.
+                with self.sandbox(image=self.settings.ir_image) as clang:
+                    clang.files("/case", {"program.ll": artifact})
+                    execution = clang.execute(
+                        clang_command(), self.timeout(self.settings.compile_timeout)
+                    )
+                    available = max(0, self.settings.max_log_bytes - len(result["log"]))
+                    result["log"] += ("\nClang IR lowering:\n" + execution.log)[:available]
+                    if execution.limit:
+                        fail(execution.limit, f"Clang: {execution.limit.replace('_', ' ')}.")
+                    elif execution.code:
+                        fail(
+                            "compile_error",
+                            f"Clang could not compile LLVM IR (exit {execution.code}).",
+                        )
+                    else:
+                        artifact = strip_debug(
+                            clang.read_file("/output/program.s", self.settings.max_artifact_bytes)
+                        )
             if case.stage != "semantic" and result["verdict"] == "accepted":
                 for index, (inp, expected) in enumerate(case.io, 1):
                     if self.cancelled():
@@ -98,7 +129,11 @@ class Judge:
                     with self.sandbox(runtime=True) as runtime:
                         runtime.files(
                             "/case",
-                            {"program.s": assembly, "stdin": inp.read_bytes() if inp else b""},
+                            {
+                                "program.s": artifact,
+                                "runtime.s": build.runtime,
+                                "stdin": inp.read_bytes() if inp else b"",
+                            },
                         )
                         execution = runtime.execute(
                             [
@@ -106,7 +141,7 @@ class Judge:
                                 "--memory=256M",
                                 "--stack=1M",
                                 "-f",
-                                "/case/program.s",
+                                "/case/program.s,/case/runtime.s",
                                 "-i",
                                 "/case/stdin",
                                 "-o",

@@ -30,7 +30,7 @@ def scoring_setup(settings, tmp_path):
         "id": "baseline-one",
         "catalog_version": catalog.version,
         "created_at": time.time(),
-        "compiler": "rustc 1.90.0",
+        "compiler": "rustc 1.95.0",
         "opt_levels": list(OPT_LEVELS),
         "cases": [{"case_id": c.id, "cycles": 100, "best_opt_level": "2"} for c in cases],
         "variants": {"private_diagnostic": "operator only"},
@@ -190,15 +190,21 @@ def test_variants_change_both_runtime_and_testcase_optimization():
     import io
     import tarfile
 
-    files = {"config.mk": b"BUILD = cargo build\nCODEGEN = rustc -C opt-level=2 input.rs\n"}
+    files = {
+        "config.mk": (
+            b"BUILD = cargo build\nIR = rustc -C opt-level=2 input.rs\n"
+            b"CODEGEN = rustc -C opt-level=2 input.rs\n"
+        )
+    }
     for level in OPT_LEVELS:
         with tarfile.open(fileobj=io.BytesIO(variant_source(files, level))) as archive:
             config = archive.extractfile("config.mk").read().decode()
         assert f"CARGO_PROFILE_RELEASE_OPT_LEVEL={level}" in config
-        assert f"-C opt-level={level}" in config
+        assert f"CODEGEN = rustc -C opt-level={level}" in config
+        assert "IR = rustc -C opt-level=2" in config
     assert files["config.mk"].startswith(b"BUILD = cargo build")
     with pytest.raises(ValueError, match="exactly one"):
-        variant_source({"config.mk": b"BUILD = cargo build"}, "2")
+        variant_source({"config.mk": b"BUILD = cargo build\nCODEGEN = rustc input.rs"}, "2")
     with pytest.raises(ValueError, match="Unsupported"):
         variant_source(files, "untrusted-flag")
 

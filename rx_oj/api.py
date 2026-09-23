@@ -39,7 +39,7 @@ class Submission(BaseModel):
     language: str = Field(min_length=1, max_length=40)
     repository_url: str = Field(min_length=1, max_length=500)
     git_ref: str = Field(default="HEAD", min_length=1, max_length=200)
-    suite: Literal["semantic", "codegen", "optimization"]
+    suite: Literal["semantic", "ir", "codegen", "optimization"]
 
 
 def create_app(settings: Settings | None = None):
