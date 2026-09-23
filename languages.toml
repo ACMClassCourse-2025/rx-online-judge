@@ -1,0 +1,30 @@
+# Operator-owned allowlist. Submissions cannot choose arbitrary images or Docker options.
+[[languages]]
+id = "cpp"
+name = "C / C++"
+image = "rx-oj-cpp:local"
+description = "GCC 14, CMake, Make, Python 3"
+
+[[languages]]
+id = "rust"
+name = "Rust"
+image = "rx-oj-rust:local"
+description = "Rust 1.90, Cargo, RV32IM target, Make, Python 3"
+
+[[languages]]
+id = "python"
+name = "Python"
+image = "rx-oj-python:local"
+description = "Python 3.13, Make"
+
+[[languages]]
+id = "java"
+name = "Java"
+image = "rx-oj-java:local"
+description = "OpenJDK 21, Make, Python 3"
+
+[[languages]]
+id = "node"
+name = "JavaScript"
+image = "rx-oj-node:local"
+description = "Node.js 22, Make, Python 3"

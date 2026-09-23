@@ -1,0 +1,67 @@
+name: rx-online-judge
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: docker/app.Dockerfile
+    image: rx-oj-app:local
+    user: "1000:1000"
+    ports:
+      - "127.0.0.1:${OJ_PORT:-8000}:8000"
+    environment:
+      OJ_SECURE_COOKIES: ${OJ_SECURE_COOKIES:-0}
+      OJ_GIT_HOSTS: ${OJ_GIT_HOSTS:-github.com,gitlab.com,codeberg.org,gitee.com}
+    volumes:
+      - judge-data:/data
+      - ${RX_TESTS_PATH:-../rx-compiler/tests}:/tests:ro
+      - ./languages.toml:/app/languages.toml:ro
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    restart: unless-stopped
+
+  worker:
+    image: rx-oj-app:local
+    pull_policy: never
+    user: "1000:1000"
+    group_add:
+      - "${OJ_DOCKER_GID:-0}"
+    command: ["python", "-m", "rx_oj.worker"]
+    environment:
+      OJ_DOCKER_RUNTIME: ${OJ_DOCKER_RUNTIME:-}
+      OJ_GIT_HOSTS: ${OJ_GIT_HOSTS:-github.com,gitlab.com,codeberg.org,gitee.com}
+    volumes:
+      - judge-data:/data
+      - ${RX_TESTS_PATH:-../rx-compiler/tests}:/tests:ro
+      - ./languages.toml:/app/languages.toml:ro
+      - ${OJ_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+    depends_on: [api]
+    read_only: true
+    tmpfs:
+      - /tmp:size=64m
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 45s
+    restart: unless-stopped
+
+  baseline:
+    extends:
+      service: worker
+    profiles: [tools]
+    command:
+      - python
+      - -m
+      - rx_oj.baseline
+      - --reference-dir
+      - /reference
+      - --output
+      - /data/optimization-baseline.json
+    volumes:
+      - ${RX_REFERENCE_PATH:-../rx-compiler}:/reference:ro
+    restart: "no"
+
+volumes:
+  judge-data:

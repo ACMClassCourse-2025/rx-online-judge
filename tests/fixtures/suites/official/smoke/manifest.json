@@ -1,0 +1,6 @@
+[
+  {"source":"empty.rx","stage":"semantic","compilation_success":true},
+  {"source":"invalid.rx","stage":"semantic","compilation_success":false},
+  {"source":"print.rx","stage":"codegen","compilation_success":true,"io":[{"input":null,"output":"print.out"},{"input":"unused.in","output":"print.out"}]},
+  {"source":"empty.rx","stage":"optimization","compilation_success":true,"io":[{"input":null,"output":"empty.out"}]}
+]

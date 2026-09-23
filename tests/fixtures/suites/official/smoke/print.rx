@@ -1,0 +1,2 @@
+use rx::core::*;
+fn main() { println_i32(42); }

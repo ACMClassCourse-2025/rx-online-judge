@@ -1,0 +1,377 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="theme-color" content="#f7f8fa" />
+    <title>Rx · Compiler Judge</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect width='40' height='40' rx='10' fill='%23112822'/%3E%3Ctext x='7' y='28' fill='white' font-size='25' font-family='monospace'%3ERx%3C/text%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="/static/style.css" />
+    <script src="/static/app.js" defer></script>
+  </head>
+  <body>
+    <aside class="sidebar">
+      <a class="brand" href="#submissions"
+        ><span class="brand-icon">Rx<span>↗</span></span
+        ><span>Compiler Judge<small>RX LANGUAGE LAB</small></span></a
+      >
+      <div class="workspace-label">WORKSPACE <span>01</span></div>
+      <nav aria-label="Main navigation">
+        <a href="#submissions" class="nav-link active" data-page="submissions"
+          ><span>▤</span> Submissions
+          <span class="nav-count" id="nav-count">0</span></a
+        >
+        <a href="#leaderboard" class="nav-link" data-page="leaderboard"
+          ><span>▥</span> Leaderboard</a
+        >
+      </nav>
+      <div class="sidebar-bottom">
+        <div class="connection">
+          <span class="status-dot" id="status-dot"></span
+          ><span id="worker-status">Connecting to judge</span>
+        </div>
+        <p>Rx compiler course<br />RV32IM · REIMU</p>
+        <span class="version">COURSE WORKSPACE / v0.2</span>
+      </div>
+    </aside>
+    <div class="shell">
+      <header class="topbar">
+        <span
+          >Workspace <span class="slash">/</span>
+          <strong id="breadcrumb">Submissions</strong></span
+        >
+        <div>
+          <span class="live-label">● LIVE RESULTS</span
+          ><button class="button ghost small" id="access-button">
+            Sign in <span>↗</span>
+          </button>
+        </div>
+      </header>
+      <main>
+        <div id="notice" class="notice" role="status" hidden></div>
+        <section id="page-submissions" class="page">
+          <div class="page-heading">
+            <div>
+              <div class="eyebrow">COMPILE. VERIFY. IMPROVE.</div>
+              <h1>Your compiler, put to the test<span>.</span></h1>
+              <p>
+                From semantic checks to optimized assembly. One place for every
+                run.
+              </p>
+            </div>
+            <span class="outline-label">RV32IM TARGET</span>
+          </div>
+          <div class="metrics" id="metrics">
+            <article>
+              <span class="metric-label">Available tests <span>↗</span></span
+              ><strong id="metric-total">—</strong
+              ><small>Official & custom manifests</small>
+            </article>
+            <article>
+              <span class="metric-label">Semantic analysis <span>01</span></span
+              ><strong id="metric-semantic">—</strong
+              ><small>Acceptance & diagnostic checks</small>
+            </article>
+            <article>
+              <span class="metric-label">Code generation <span>02</span></span
+              ><strong id="metric-codegen">—</strong
+              ><small>Assembly & output correctness</small>
+            </article>
+            <article>
+              <span class="metric-label">Optimization <span>03</span></span
+              ><strong id="metric-optimization">—</strong
+              ><small>Correctness & REIMU cycles</small>
+            </article>
+          </div>
+          <div class="main-grid">
+            <section class="panel submissions-panel">
+              <div class="panel-heading">
+                <div>
+                  <h2>
+                    Recent submissions
+                    <span id="submission-count" class="count">0</span>
+                  </h2>
+                  <p>Follow each compiler through the judge.</p>
+                </div>
+                <button
+                  id="refresh"
+                  class="icon-button"
+                  title="Refresh submissions"
+                  aria-label="Refresh submissions"
+                >
+                  ↻
+                </button>
+              </div>
+              <div class="table-scroll">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>SUBMISSION</th>
+                      <th>LANGUAGE</th>
+                      <th>VERDICT</th>
+                      <th>TESTS</th>
+                    </tr>
+                  </thead>
+                  <tbody id="submissions-body"></tbody>
+                </table>
+              </div>
+              <div id="empty-state" class="empty">
+                <span class="empty-icon">⌁</span>
+                <h3>A fresh start for your compiler</h3>
+                <p>
+                  Submit a project to see its results here.<br />Your first
+                  passing test is one commit away.
+                </p>
+              </div>
+              <div class="panel-footer">
+                <span id="pagination-info">No submissions yet</span>
+                <div>
+                  <button class="button ghost small" id="previous" disabled>
+                    ← Previous</button
+                  ><button class="button ghost small" id="next" disabled>
+                    Next →
+                  </button>
+                </div>
+              </div>
+            </section>
+            <section class="panel submit-panel">
+              <div class="panel-heading">
+                <div>
+                  <div class="eyebrow">START A RUN</div>
+                  <h2>Submit your compiler</h2>
+                </div>
+                <span class="submit-symbol">↗</span>
+              </div>
+              <form id="submit-form">
+                <label for="submission-name">Submission name</label
+                ><input
+                  id="submission-name"
+                  name="name"
+                  placeholder="e.g. register-allocation-v2"
+                  maxlength="80"
+                  required
+                  autocomplete="off"
+                />
+                <label for="language">Implementation language</label
+                ><select id="language" name="language" required>
+                  <option value="">Loading languages…</option>
+                </select>
+                <p class="field-help" id="language-help"></p>
+                <label for="repository-url">Public Git repository</label>
+                <input
+                  id="repository-url"
+                  name="repository_url"
+                  type="url"
+                  placeholder="https://github.com/you/rx-compiler.git"
+                  maxlength="500"
+                  required
+                />
+                <p class="field-help" id="git-hosts"></p>
+                <label for="git-ref">Branch, tag, or commit</label>
+                <input
+                  id="git-ref"
+                  name="git_ref"
+                  value="HEAD"
+                  maxlength="200"
+                  required
+                  autocomplete="off"
+                />
+                <label for="suite">Test suite</label>
+                <select id="suite" name="suite" required>
+                  <option value="semantic">Semantic analysis</option>
+                  <option value="codegen">Code generation</option>
+                  <option value="optimization">Optimization</option>
+                </select>
+                <p class="field-help" id="suite-help">
+                  Every testcase in the suite runs. Later suites include all
+                  earlier suites.
+                </p>
+                <p class="field-help">
+                  Include <code>config.mk</code> at the repository root.
+                </p>
+                <button class="button primary" id="submit-button" type="submit">
+                  Submit for judging <span>→</span>
+                </button>
+                <p class="submit-note">
+                  Runs in an isolated language container.
+                </p>
+              </form>
+            </section>
+          </div>
+          <section
+            id="detail"
+            class="panel detail-panel"
+            hidden
+            aria-live="polite"
+          ></section>
+          <div class="workflow-strip">
+            <span>THE JUDGING PIPELINE</span
+            ><strong>01 <span>Build compiler</span></strong
+            ><i>→</i><strong>02 <span>Compile testcases</span></strong
+            ><i>→</i><strong>03 <span>Run & verify</span></strong
+            ><i>→</i><strong>04 <span>Collect cycles</span></strong>
+          </div>
+        </section>
+        <section id="page-leaderboard" class="page" hidden>
+          <div class="page-heading">
+            <div>
+              <div class="eyebrow">MAKE EVERY CYCLE COUNT</div>
+              <h1>Optimization leaderboard<span>.</span></h1>
+              <p>Compare your compiler with the official Rust baseline.</p>
+            </div>
+            <span class="outline-label">LOWER IS BETTER</span>
+          </div>
+          <div class="score-explainer">
+            <article>
+              <strong>01 / BASELINE</strong>
+              <p>
+                For each testcase, use the fewest cycles from correct Rust
+                builds at optimization levels 0, 1, 2, 3, s, and z.
+              </p>
+            </article>
+            <article>
+              <strong>02 / SCORE</strong>
+              <p>
+                Divide your cycles by the baseline, then take the geometric mean
+                across all optimization testcases. A score of 1.0 matches the
+                baseline.
+              </p>
+            </article>
+            <article>
+              <strong>03 / RANK</strong>
+              <p>
+                Your best fully accepted optimization submission counts. Every
+                earlier suite must pass. Lower scores rank higher.
+              </p>
+            </article>
+          </div>
+          <section class="panel leaderboard-panel">
+            <div class="panel-heading">
+              <div>
+                <h2>
+                  Ranked accounts
+                  <span id="leaderboard-count" class="count">0</span>
+                </h2>
+                <p id="baseline-info">Loading baseline…</p>
+              </div>
+              <button
+                id="refresh-leaderboard"
+                class="icon-button"
+                title="Refresh leaderboard"
+                aria-label="Refresh leaderboard"
+              >
+                ↻
+              </button>
+            </div>
+            <div
+              class="table-scroll"
+              tabindex="0"
+              role="region"
+              aria-label="Optimization leaderboard"
+            >
+              <table>
+                <thead>
+                  <tr>
+                    <th>RANK</th>
+                    <th>ACCOUNT</th>
+                    <th>SCORE ↓</th>
+                    <th>BEST SUBMISSION</th>
+                    <th>LANGUAGE</th>
+                    <th>ACHIEVED</th>
+                  </tr>
+                </thead>
+                <tbody id="leaderboard-body"></tbody>
+              </table>
+            </div>
+            <div id="leaderboard-empty" class="empty">
+              <span class="empty-icon">▥</span>
+              <h3 id="leaderboard-empty-title">No ranked submissions yet</h3>
+              <p id="leaderboard-empty-message">
+                Pass the full optimization suite to earn a score.
+              </p>
+            </div>
+            <div class="panel-footer">
+              <span
+                >Geometric mean of testcase cycle ratios · equal scores share a
+                rank</span
+              >
+            </div>
+          </section>
+          <p class="leaderboard-note">
+            Cycles are summed across every input of a testcase before
+            calculating its ratio. Expand an account’s score to see each
+            testcase.
+          </p>
+        </section>
+        <footer>
+          RX / COMPILER JUDGE
+          <span>Built for the path from source to silicon.</span>
+        </footer>
+      </main>
+    </div>
+    <dialog id="login-dialog">
+      <form id="login-form">
+        <div class="eyebrow">COURSE ACCOUNT</div>
+        <h2>Sign in to your judge</h2>
+        <p>
+          Your administrator provides your account. Contact them if you need an
+          account or a password reset.
+        </p>
+        <p id="login-error" class="notice" role="alert" hidden></p>
+        <label for="username">Username</label
+        ><input id="username" autocomplete="username" required maxlength="40" />
+        <label for="password">Password</label
+        ><input
+          id="password"
+          type="password"
+          autocomplete="current-password"
+          required
+          maxlength="256"
+        />
+        <div class="dialog-actions">
+          <button class="button primary" id="login-button" type="submit">
+            Sign in →
+          </button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="account-dialog">
+      <form id="password-form">
+        <div class="eyebrow">YOUR ACCOUNT</div>
+        <h2 id="account-name"></h2>
+        <p>Changing your password signs out every session.</p>
+        <p id="password-error" class="notice" role="alert" hidden></p>
+        <label for="current-password">Current password</label
+        ><input
+          id="current-password"
+          type="password"
+          autocomplete="current-password"
+          required
+          maxlength="256"
+        />
+        <label for="new-password">New password</label
+        ><input
+          id="new-password"
+          type="password"
+          autocomplete="new-password"
+          required
+          minlength="12"
+          maxlength="256"
+        />
+        <div class="dialog-actions">
+          <button type="button" class="button ghost" id="close-account">
+            Close</button
+          ><button class="button primary" type="submit">Change password</button>
+        </div>
+        <div class="dialog-actions">
+          <button type="button" class="button ghost" id="logout-button">
+            Sign out
+          </button>
+        </div>
+      </form>
+    </dialog>
+  </body>
+</html>
