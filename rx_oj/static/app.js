@@ -62,6 +62,21 @@ function clearSession() {
   renderSubmissions({ items: [], total: 0 });
   renderLeaderboard({ status: "signed_out", items: [] });
   $("access-button").textContent = "Sign in";
+  $("submission-fields").disabled = true;
+  $("submit-button").innerHTML =
+    'Sign in to submit <span aria-hidden="true">→</span>';
+  $("refresh").disabled = true;
+  $("refresh-leaderboard").disabled = true;
+  $("worker-status").textContent = "Sign in to connect";
+  $("status-dot").classList.remove("ready");
+  state.catalog = null;
+  state.languages = [];
+  $("language").innerHTML = '<option value="">Sign in to select</option>';
+  $("language-help").textContent = "";
+  $("git-hosts").textContent = "Use a public HTTPS repository.";
+  $("suite-help").textContent = "Each suite includes the stages before it.";
+  for (const metric of document.querySelectorAll('[id^="metric-"]'))
+    metric.textContent = "—";
 }
 async function api(path, options = {}) {
   const response = await fetch(`/api${path}`, {
@@ -75,14 +90,18 @@ async function api(path, options = {}) {
   });
   const data = await response.json();
   if (response.status === 401 && path !== "/auth/login") {
+    const hadSession = Boolean(state.user);
     clearSession();
-    showLogin();
+    if (hadSession || path !== "/auth/me") showLogin();
   }
   if (!response.ok)
-    throw new Error(
-      typeof data.detail === "string"
-        ? data.detail
-        : "Check the form and try again.",
+    throw Object.assign(
+      new Error(
+        typeof data.detail === "string"
+          ? data.detail
+          : "Check the form and try again.",
+      ),
+      { status: response.status },
     );
   return data;
 }
@@ -99,7 +118,7 @@ function route() {
     if (active) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
   }
-  $("breadcrumb").textContent = label(state.page);
+  document.title = `${label(state.page)} · Rx Compiler Judge`;
   refresh();
 }
 function scoreTable(cases) {
@@ -117,19 +136,26 @@ function renderLeaderboard(data) {
   $("leaderboard-count").textContent = number(data.items.length);
   $("leaderboard-empty").hidden = data.items.length > 0;
   const ready = data.status === "ready";
-  $("baseline-info").textContent = ready
-    ? `${data.baseline.compiler.split("\n")[0]} · ${data.baseline.cases.length} optimization tests · baseline ${data.baseline.id.slice(0, 12)}`
-    : data.status === "stale"
-      ? "The test catalog has changed."
-      : "An official Rust baseline is required for scoring.";
-  $("leaderboard-empty-title").textContent = ready
-    ? "No ranked submissions yet"
-    : data.status === "stale"
-      ? "Baseline needs updating"
-      : "Waiting for the baseline";
-  $("leaderboard-empty-message").textContent = ready
-    ? "Pass the full optimization suite to earn a score."
-    : "Your administrator can generate the official Rust baseline. Scores will appear here when it is ready.";
+  const signedOut = data.status === "signed_out";
+  $("baseline-info").textContent = signedOut
+    ? "Sign in to see the Rust baseline."
+    : ready
+      ? `${data.baseline.compiler.split("\n")[0]} · ${data.baseline.cases.length} optimization tests`
+      : data.status === "stale"
+        ? "The test catalog has changed."
+        : "An official Rust baseline is required for scoring.";
+  $("leaderboard-empty-title").textContent = signedOut
+    ? "A place for your personal best."
+    : ready
+      ? "First place is up for grabs."
+      : data.status === "stale"
+        ? "Baseline needs updating"
+        : "Waiting for the baseline";
+  $("leaderboard-empty-message").textContent = signedOut
+    ? "Sign in to see the leaderboard."
+    : ready
+      ? "Pass the full optimization suite to earn a score."
+      : "Scores appear once your administrator generates the Rust baseline.";
   $("leaderboard-body").innerHTML = data.items
     .map((row) => {
       const id = escapeHTML(row.submission_id);
@@ -139,9 +165,12 @@ function renderLeaderboard(data) {
     .join("");
 }
 function renderSubmissions(data) {
-  $("nav-count").textContent = number(data.total);
   $("submission-count").textContent = number(data.total);
   $("empty-state").hidden = data.items.length > 0;
+  $("empty-title").textContent = "Hello, compiler.";
+  $("empty-message").textContent = state.user
+    ? "Your first run starts with a Git repository."
+    : "Sign in to start your first run.";
   $("pagination-info").textContent = data.total
     ? `${state.offset + 1}–${state.offset + data.items.length} of ${number(data.total)} submissions`
     : "No submissions yet";
@@ -245,16 +274,25 @@ async function initialize() {
     $("suite").dispatchEvent(new Event("change"));
     $("git-hosts").textContent =
       `Public repositories only: ${catalog.git_hosts.join(", ")}`;
+    $("submission-fields").disabled = false;
+    $("submit-button").innerHTML =
+      'Submit compiler <span aria-hidden="true">→</span>';
+    $("refresh").disabled = false;
+    $("refresh-leaderboard").disabled = false;
     notice();
     await refresh();
   } catch (e) {
-    notice(e.message);
+    if (e.status !== 401) notice(e.message);
   }
 }
 $("submit-form").addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (!state.user) {
+    showLogin();
+    return;
+  }
   $("submit-button").disabled = true;
-  $("submit-button").textContent = "Submitting repository…";
+  $("submit-button").textContent = "Submitting…";
   try {
     const result = await api("/submissions", {
       method: "POST",
@@ -270,7 +308,8 @@ $("submit-form").addEventListener("submit", async (event) => {
     notice(e.message);
   } finally {
     $("submit-button").disabled = false;
-    $("submit-button").innerHTML = "Submit for judging <span>→</span>";
+    $("submit-button").innerHTML =
+      `${state.user ? "Submit compiler" : "Sign in to submit"} <span aria-hidden="true">→</span>`;
   }
 });
 async function openSubmission(id) {
@@ -282,7 +321,7 @@ async function openSubmission(id) {
       location.hash = "#submissions";
       route();
       renderDetail(result);
-      $("detail").scrollIntoView({ behavior: "smooth", block: "start" });
+      $("detail").scrollIntoView({ block: "start" });
     }
   } catch (e) {
     notice(e.message);
@@ -310,7 +349,7 @@ $("suite").onchange = () => {
   const suite = state.catalog?.suites.find((s) => s.id === $("suite").value);
   if (suite)
     $("suite-help").textContent =
-      `Runs ${suite.includes.map(label).join(" → ")}: all ${number(suite.total)} tests.`;
+      `${suite.includes.map(label).join(" → ")} · ${number(suite.total)} tests`;
 };
 $("language").onchange = () => {
   $("language-help").textContent =
@@ -332,9 +371,12 @@ $("next").onclick = () => {
 $("access-button").onclick = () =>
   state.user ? $("account-dialog").showModal() : showLogin();
 $("close-account").onclick = () => $("account-dialog").close();
-$("login-dialog").addEventListener("cancel", (event) => {
-  if (!state.user) event.preventDefault();
-});
+$("close-login").onclick = () => $("login-dialog").close();
+$("start-run").onclick = () => {
+  if (!state.user) return showLogin();
+  $("new-run").scrollIntoView({ block: "start" });
+  $("submission-name").focus({ preventScroll: true });
+};
 $("login-form").onsubmit = async (event) => {
   event.preventDefault();
   $("login-button").disabled = true;

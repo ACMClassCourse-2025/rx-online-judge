@@ -7,6 +7,8 @@ suite. The judge fetches the source, builds the compiler, and runs Rx tests in c
 
 ![Rx judge dashboard](docs/dashboard.png)
 
+The screenshots use illustrative submissions and rankings.
+
 ## Suite progression
 
 There are four selectable suites. Later suites always include all earlier suites,
@@ -409,7 +411,10 @@ make worker
 
 Development uses `./data` and `./testcases`; accounts are required here too.
 For smoke fixtures, use `OJ_TESTS_DIR=tests/fixtures/suites` for both API and worker.
-The frontend has no build step or CDN dependency.
+The frontend has no build step or CDN dependency. Its Rust-inspired typography and
+Fellis illustration are bundled locally; see [asset sources and licenses](rx_oj/static/assets.md).
+The landing page is visible before sign-in; submissions, results, and rankings still
+require an account.
 
 ```sh
 make lint
