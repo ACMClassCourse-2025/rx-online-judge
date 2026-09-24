@@ -75,8 +75,6 @@ function clearSession() {
   $("language-help").textContent = "";
   $("git-hosts").textContent = "Use a public HTTPS repository.";
   $("suite-help").textContent = "Each suite includes the stages before it.";
-  for (const metric of document.querySelectorAll('[id^="metric-"]'))
-    metric.textContent = "—";
 }
 async function api(path, options = {}) {
   const response = await fetch(`/api${path}`, {
@@ -240,6 +238,20 @@ async function refresh() {
     state.busy = false;
   }
 }
+function renderMetrics(catalog) {
+  for (const stage of ["semantic", "ir", "codegen", "optimization"])
+    $(`metric-${stage}`).textContent = number(catalog.stages[stage] || 0);
+  $("metric-total").textContent = number(catalog.total);
+}
+async function loadMetrics() {
+  try {
+    renderMetrics(await api("/catalog/summary"));
+  } catch {
+    if (state.catalog) return;
+    for (const metric of document.querySelectorAll('[id^="metric-"]'))
+      metric.textContent = "N/A";
+  }
+}
 async function initialize() {
   try {
     const session = await api("/auth/me");
@@ -268,9 +280,7 @@ async function initialize() {
           `<option value="${escapeHTML(s.id)}">${escapeHTML(label(s.id))} · ${number(s.total)} tests</option>`,
       )
       .join("");
-    for (const stage of ["semantic", "ir", "codegen", "optimization"])
-      $(`metric-${stage}`).textContent = number(catalog.stages[stage] || 0);
-    $("metric-total").textContent = number(catalog.total);
+    renderMetrics(catalog);
     $("suite").dispatchEvent(new Event("change"));
     $("git-hosts").textContent =
       `Public repositories only: ${catalog.git_hosts.join(", ")}`;
@@ -432,6 +442,7 @@ $("password-form").onsubmit = async (event) => {
 };
 window.addEventListener("hashchange", route);
 route();
+loadMetrics();
 initialize();
 setInterval(() => {
   if (!document.hidden) refresh();

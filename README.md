@@ -335,7 +335,8 @@ set `OJ_DOCKER_SOCKET` before running setup.
 
 ## API
 
-OpenAPI is at `/openapi.json`. All API endpoints except login require an account session.
+OpenAPI is at `/openapi.json`. All API endpoints except login and the public
+`/api/catalog/summary` stage counts require an account session.
 POST requests other than login require `X-CSRF-Token`, returned by login and `/api/auth/me`.
 
 | Method | Path | Purpose |
@@ -345,6 +346,7 @@ POST requests other than login require `X-CSRF-Token`, returned by login and `/a
 | POST | `/api/auth/logout` | Revoke current session |
 | POST | `/api/auth/password` | Change password; revoke all sessions |
 | GET | `/api/catalog` | Four cumulative suites, counts, allowed Git hosts |
+| GET | `/api/catalog/summary` | Public stage counts and total for the landing page |
 | GET | `/api/languages` | Allowed compiler implementation languages |
 | GET | `/api/health` | Worker connectivity and queue depth |
 | GET | `/api/leaderboard` | Account rankings, active baseline, and testcase cycle ratios |
@@ -413,8 +415,8 @@ Development uses `./data` and `./testcases`; accounts are required here too.
 For smoke fixtures, use `OJ_TESTS_DIR=tests/fixtures/suites` for both API and worker.
 The frontend has no build step or CDN dependency. Its Rust-inspired typography and
 Fellis illustration are bundled locally; see [asset sources and licenses](rx_oj/static/assets.md).
-The landing page is visible before sign-in; submissions, results, and rankings still
-require an account.
+The landing page and testcase counts are visible before sign-in; submissions, results,
+and rankings still require an account.
 
 ```sh
 make lint

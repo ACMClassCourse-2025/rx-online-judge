@@ -23,6 +23,26 @@ def submit(client, **data):
     )
 
 
+def test_catalog_summary_is_public_before_and_after_logout(settings, accounts, sign_in):
+    expected = {
+        "total": 5,
+        "stages": {"semantic": 2, "ir": 1, "codegen": 1, "optimization": 1},
+    }
+    with TestClient(create_app(settings)) as client:
+        response = client.get("/api/catalog/summary")
+        assert response.status_code == 200
+        assert response.json() == expected
+        assert "set-cookie" not in response.headers
+        for path in ("catalog", "submissions", "leaderboard", "health", "languages", "auth/me"):
+            assert client.get(f"/api/{path}").status_code == 401
+        sign_in(client)
+        catalog = client.get("/api/catalog").json()
+        assert {key: catalog[key] for key in expected} == expected
+        assert client.post("/api/auth/logout").status_code == 200
+        assert client.get("/api/catalog/summary").json() == expected
+        assert client.get("/api/catalog").status_code == 401
+
+
 def test_api_submission_validation_and_cancel(settings, accounts, sign_in):
     with TestClient(create_app(settings)) as client:
         assert client.get("/").status_code == 200

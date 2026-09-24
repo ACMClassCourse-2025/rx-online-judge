@@ -32,3 +32,4 @@ lint:
 	uv run ruff check .
 	uv run ruff format --check .
 	node --check rx_oj/static/app.js
+	node --check rx_oj/static/fellis.js

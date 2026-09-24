@@ -11,3 +11,7 @@ All fonts and illustrations are served locally; the UI makes no third-party requ
   from <https://rustacean.net/assets/rustacean-flat-happy.svg>.
   Released under [CC0](https://creativecommons.org/publicdomain/zero/1.0/),
   as recorded at <https://rustacean.net/>. Called Fellis in this judge.
+  The front-page SVG in `index.html` reuses these paths with animated claw and eye groups.
+  Its hover pose uses custom vector claws and an impact spark, with motion based on
+  the [Ferris clapping loop](https://tenor.com/view/ferris-crab-cheer-clap-looping-gif-26403768)
+  (five claps in 1.7 seconds). The GIF itself is not bundled or loaded by the page.

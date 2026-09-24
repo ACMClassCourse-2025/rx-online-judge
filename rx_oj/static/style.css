@@ -271,16 +271,153 @@ h1 {
   border-top: 12px solid var(--yellow);
   border-right: 13px solid transparent;
 }
-.mascot img {
+.mascot-crab {
+  --clap-duration: 340ms;
   display: block;
   width: min(100%, 360px);
   height: auto;
   margin-top: 26px;
+  overflow: visible;
   transform: rotate(-5deg);
-  transition: transform 220ms ease;
 }
-.mascot:hover img {
-  transform: rotate(3deg) translateY(-5px);
+.mascot-body {
+  pointer-events: none;
+}
+.mascot-claw {
+  transform-box: view-box;
+}
+.mascot-claw-left {
+  transform-origin: 270px 487px;
+  --sway-from: -7deg;
+  --sway-to: 8deg;
+}
+.mascot-claw-right {
+  transform-origin: 918px 490px;
+  --sway-from: 7deg;
+  --sway-to: -8deg;
+}
+.mascot-crab.is-awake .mascot-claw {
+  animation: mascot-sway 2.8s ease-in-out infinite;
+}
+.mascot-crab.is-awake.is-clapping .mascot-claw {
+  visibility: hidden;
+  animation: none;
+}
+.mascot-crab.is-awake.is-clapping .mascot-body {
+  animation: mascot-clap-dip var(--clap-duration) linear infinite;
+}
+.mascot-clapping-arms {
+  display: none;
+  fill: #f74c00;
+  stroke: #a52b00;
+  stroke-width: 5px;
+  stroke-linejoin: round;
+}
+.mascot-crab.is-awake.is-clapping .mascot-clapping-arms {
+  display: inline;
+}
+.mascot-forearm {
+  fill: #dc4300;
+}
+.mascot-pincer {
+  /* Each mirrored claw rotates around its own fixed wrist. */
+  transform-box: view-box;
+  transform-origin: 0 0;
+}
+.mascot-crab.is-awake.is-clapping .mascot-pincer {
+  animation: mascot-clap var(--clap-duration) linear infinite;
+}
+.mascot-pincer .mascot-pincer-shine {
+  fill: none;
+  stroke: #ff955f;
+  stroke-width: 10px;
+  stroke-linecap: round;
+}
+.mascot-clap-spark {
+  fill: #fff;
+  stroke: none;
+  opacity: 0;
+}
+.mascot-crab.is-awake.is-clapping .mascot-clap-spark {
+  animation: mascot-clap-spark var(--clap-duration) linear infinite;
+}
+.mascot-eye {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.mascot-gaze {
+  transform: translate(var(--gaze-x, 0px), var(--gaze-y, 0px));
+  transition: transform 180ms ease-out;
+}
+.mascot-crab.is-blinking .mascot-eye {
+  animation: mascot-blink 200ms ease-in-out;
+}
+@keyframes mascot-sway {
+  0%,
+  100% {
+    transform: rotate(var(--sway-from));
+  }
+  50% {
+    transform: rotate(var(--sway-to));
+  }
+}
+@keyframes mascot-clap {
+  0%,
+  12%,
+  94%,
+  100% {
+    transform: rotate(-12deg);
+  }
+  38% {
+    transform: rotate(22deg);
+  }
+  53%,
+  61% {
+    transform: rotate(73deg);
+  }
+  76% {
+    transform: rotate(32deg);
+  }
+}
+@keyframes mascot-clap-dip {
+  0%,
+  32%,
+  100% {
+    transform: translateY(0);
+  }
+  56% {
+    transform: translateY(7px);
+  }
+  82% {
+    transform: translateY(-2px);
+  }
+}
+@keyframes mascot-clap-spark {
+  0%,
+  49%,
+  80%,
+  100% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  54% {
+    opacity: 1;
+    transform: scale(0.75);
+  }
+  68% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+@keyframes mascot-blink {
+  0%,
+  100% {
+    transform: scaleY(1);
+  }
+  45%,
+  55% {
+    transform: scaleY(0.08);
+  }
 }
 .mascot-shadow {
   width: 205px;
@@ -1095,7 +1232,7 @@ dialog p {
     font-size: 14px;
     padding: 7px 14px;
   }
-  .mascot img {
+  .mascot-crab {
     width: 210px;
     margin-top: 13px;
   }
@@ -1188,7 +1325,16 @@ dialog p {
   *::after {
     transition: none !important;
   }
-  .mascot:hover img {
-    transform: rotate(-5deg);
+  .mascot-crab * {
+    animation: none !important;
+  }
+  .mascot-gaze {
+    transform: none;
+  }
+  .mascot-crab.is-awake.is-clapping .mascot-claw {
+    visibility: visible;
+  }
+  .mascot-crab.is-awake.is-clapping .mascot-clapping-arms {
+    display: none;
   }
 }

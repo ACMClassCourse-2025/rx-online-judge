@@ -163,6 +163,11 @@ def create_app(settings: Settings | None = None):
     def catalog(user: Authenticated):
         return {**app.state.catalog.public(), "git_hosts": list(settings.git_hosts)}
 
+    @app.get("/api/catalog/summary")
+    def catalog_summary():
+        catalog = app.state.catalog.public()
+        return {"total": catalog["total"], "stages": catalog["stages"]}
+
     @app.get("/api/languages")
     def languages(user: Authenticated):
         return [
