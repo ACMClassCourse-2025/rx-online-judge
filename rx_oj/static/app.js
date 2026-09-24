@@ -165,7 +165,7 @@ function renderLeaderboard(data) {
 function renderSubmissions(data) {
   $("submission-count").textContent = number(data.total);
   $("empty-state").hidden = data.items.length > 0;
-  $("empty-title").textContent = "Hello, compiler.";
+  $("empty-title").textContent = "Hmm, nothing's here..";
   $("empty-message").textContent = state.user
     ? "Your first run starts with a Git repository."
     : "Sign in to start your first run.";

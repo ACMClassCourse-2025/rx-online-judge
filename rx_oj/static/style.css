@@ -472,16 +472,12 @@ h1 {
   height: 44px;
   flex: 0 0 auto;
   padding: 0;
-  border: 1px solid var(--line);
+  outline: none;
+  border: none;
   background: transparent;
   color: inherit;
-  border-radius: 2px;
   font-size: 26px;
   line-height: 1;
-}
-.icon-button:hover {
-  background: var(--paper);
-  color: var(--ink);
 }
 .count {
   font: 400 15px var(--mono);
@@ -508,7 +504,6 @@ th {
   letter-spacing: 0.8px;
   text-transform: uppercase;
   color: var(--muted);
-  background: var(--paper);
   padding: 14px 16px;
   border-bottom: 2px solid var(--line);
 }
