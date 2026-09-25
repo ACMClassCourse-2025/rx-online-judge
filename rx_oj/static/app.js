@@ -10,6 +10,7 @@ const state = {
   leaderboardKey: "",
   page: "submissions",
   unauthorized: true,
+  sessionReady: false,
   user: null,
   csrf: "",
   epoch: 0,
@@ -50,6 +51,7 @@ function showLogin() {
   if (!$("login-dialog").open) $("login-dialog").showModal();
 }
 function clearSession() {
+  state.sessionReady = true;
   state.epoch++;
   state.user = null;
   state.csrf = "";
@@ -57,8 +59,8 @@ function clearSession() {
   state.selected = null;
   state.detailKey = "";
   state.offset = 0;
-  $("detail").hidden = true;
-  $("detail").innerHTML = "";
+  RunPage.reset();
+  if (state.page === "run") RunPage.error("Sign in to view this run.");
   renderSubmissions({ items: [], total: 0 });
   renderLeaderboard({ status: "signed_out", items: [] });
   $("access-button").textContent = "Sign in";
@@ -107,16 +109,38 @@ function languageName(id) {
   return state.languages.find((l) => l.id === id)?.name || id;
 }
 function route() {
-  state.page = location.hash === "#leaderboard" ? "leaderboard" : "submissions";
+  const run = location.hash.match(/^#run\/([a-zA-Z0-9_-]+)$/);
+  const page = run
+    ? "run"
+    : location.hash === "#leaderboard"
+      ? "leaderboard"
+      : "submissions";
+  const selected = run?.[1] || null;
+  const changed = page !== state.page || selected !== state.selected;
+  if (selected !== state.selected) {
+    state.selected = selected;
+    state.detailKey = "";
+    RunPage.reset();
+  }
+  state.page = page;
   for (const section of document.querySelectorAll(".page"))
     section.hidden = section.id !== `page-${state.page}`;
   for (const link of document.querySelectorAll(".nav-link")) {
-    const active = link.dataset.page === state.page;
+    const active =
+      link.dataset.page === (page === "run" ? "submissions" : page);
     link.classList.toggle("active", active);
     if (active) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
   }
-  document.title = `${label(state.page)} · Rx Compiler Judge`;
+  RunPage.activate(page === "run");
+  if (page !== "run" || changed)
+    document.title = `${page === "run" ? "Your run" : label(page)} · Rx Compiler Judge`;
+  if (changed) {
+    window.scrollTo({ top: 0, behavior: "instant" });
+    if (page === "run") $("run-name").focus({ preventScroll: true });
+  }
+  if (page === "run" && state.sessionReady && !state.user)
+    RunPage.error("Sign in to view this run.");
   refresh();
 }
 function scoreTable(cases) {
@@ -177,49 +201,47 @@ function renderSubmissions(data) {
   $("submissions-body").innerHTML = data.items
     .map(
       (s) =>
-        `<tr><td><button class="submission-link" data-id="${escapeHTML(s.id)}">${escapeHTML(s.name)}</button><span class="sub-meta">${escapeHTML(s.owner || "Legacy submission")} · ${date(s.created_at)}</span></td><td>${escapeHTML(languageName(s.language))}</td><td>${badge(s.status)}</td><td>${s.passed}<span class="sub-meta">/ ${s.total} tests</span></td></tr>`,
+        `<tr><td><button class="submission-link" data-id="${escapeHTML(s.id)}">${escapeHTML(s.name)}</button><span class="sub-meta">${escapeHTML(s.owner || "Legacy submission")} · ${date(s.created_at)}</span></td><td>${escapeHTML(languageName(s.language))}</td><td><button class="status-link" data-id="${escapeHTML(s.id)}" aria-label="Open ${escapeHTML(s.name)}: ${escapeHTML(label(s.status))}">${badge(s.status)}</button></td><td>${s.passed}<span class="sub-meta">/ ${s.total} tests</span></td></tr>`,
     )
     .join("");
 }
 function renderDetail(s) {
+  $("run-error").hidden = true;
   const key = JSON.stringify(s);
   if (key === state.detailKey) return;
   state.detailKey = key;
-  $("detail").hidden = false;
-  const failures = s.results.filter((r) => r.verdict !== "accepted");
-  $("detail").innerHTML =
-    `<div class="panel-heading"><div><div class="eyebrow">SUBMISSION / ${escapeHTML(s.id.slice(0, 8))}</div><h2>${escapeHTML(s.name)}</h2></div><div class="detail-heading-actions">${badge(s.status)}${!terminal(s.status) ? `<button id="cancel-submission" class="button ghost small" ${s.cancel_requested ? "disabled" : ""}>${s.cancel_requested ? "Cancelling…" : "Cancel run"}</button>` : ""}<button id="close-detail" class="icon-button" aria-label="Close submission details">×</button></div></div>
-    <div class="detail-body"><p class="source-info">${escapeHTML(s.repository_url || "Legacy archive submission")}<br>Ref: <code>${escapeHTML(s.git_ref || "—")}</code> · Commit: <code>${escapeHTML(s.commit_sha || "Waiting for Git fetch")}</code></p><div class="detail-summary"><span><strong>${s.passed} / ${s.total}</strong> passed</span><span><strong>${s.completed}</strong> completed</span><span><strong>${number(s.cycles)}</strong> optimization cycles</span><span>${escapeHTML(label(s.stage))} · ${escapeHTML(languageName(s.language))}</span></div>${s.optimization_score ? `<div class="optimization-score"><strong>${scoreText(s.optimization_score.score)}</strong><span>Optimization score · lower is better</span><a href="#leaderboard">View leaderboard ↗</a></div>` : ""}<progress class="detail-progress" value="${s.completed}" max="${s.total}" aria-label="Completed testcases"></progress>
-    ${s.message ? `<p>${escapeHTML(s.message)}</p>` : ""}${!s.results.length ? `<p class="field-help">${s.status === "queued" ? "Waiting for a worker to claim this submission." : s.status === "running" ? "Fetching the repository, building the compiler, and preparing the suite…" : "No testcase results were produced."}</p>` : `<div class="table-scroll" tabindex="0" role="region" aria-label="Testcase results"><table><thead><tr><th>TESTCASE</th><th>STAGE</th><th>VERDICT</th><th>ELAPSED</th><th>CYCLES</th></tr></thead><tbody>${s.results.map((r) => `<tr><td class="case-name">${escapeHTML(r.case_id)}</td><td>${escapeHTML(label(r.stage))}</td><td>${badge(r.verdict)}</td><td>${(r.duration_ms / 1000).toFixed(2)}s</td><td>${r.stage === "optimization" && r.verdict === "accepted" ? number(r.cycles) : "—"}</td></tr>`).join("")}</tbody></table></div>`}
-    ${s.optimization_score ? `<details><summary>Optimization score · testcase ratios</summary>${scoreTable(s.optimization_score.cases)}</details>` : ""}
-    <details ${s.status === "build_error" ? "open" : ""}><summary>Build diagnostics</summary><pre tabindex="0" role="region" aria-label="Build diagnostics output">${escapeHTML(s.build_log || "No build output.")}</pre></details>
-    ${failures.map((r) => `<details><summary>${escapeHTML(r.case_id)} · ${escapeHTML(label(r.verdict))}</summary><p>${escapeHTML(r.message)}</p><pre tabindex="0" role="region" aria-label="Testcase diagnostics output">${escapeHTML(r.log || "No compiler or simulator diagnostics.")}</pre></details>`).join("")}
-    <details><summary>Result JSON · all runs and diagnostics</summary><pre tabindex="0" role="region" aria-label="Result JSON output">${escapeHTML(JSON.stringify(s, null, 2))}</pre></details></div>`;
-  $("close-detail").onclick = () => {
-    state.selected = null;
-    state.detailKey = "";
-    $("detail").hidden = true;
-  };
-  if ($("cancel-submission"))
-    $("cancel-submission").onclick = async () => {
-      try {
-        renderDetail(
-          await api(`/submissions/${s.id}/cancel`, { method: "POST" }),
-        );
-      } catch (e) {
-        notice(e.message);
-      }
-    };
+  RunPage.update(s);
 }
+$("cancel-submission").onclick = async () => {
+  const id = state.selected;
+  if (!id) return;
+  $("cancel-submission").disabled = true;
+  try {
+    const result = await api(`/submissions/${id}/cancel`, { method: "POST" });
+    if (state.selected === id) renderDetail(result);
+  } catch (e) {
+    if (state.selected === id) {
+      RunPage.error(e.message);
+      $("cancel-submission").disabled = false;
+    }
+  }
+};
 async function refresh() {
   if (state.busy || state.unauthorized) return;
   state.busy = true;
   const epoch = state.epoch;
+  const selected = state.selected;
   try {
     const [submissions, health, detail, rankings] = await Promise.all([
       api(`/submissions?limit=10&offset=${state.offset}`),
       api("/health"),
-      state.selected ? api(`/submissions/${state.selected}`) : null,
+      selected
+        ? api(`/submissions/${selected}`).catch((e) => {
+            if (state.selected === selected && state.page === "run")
+              RunPage.error(e.message);
+            return null;
+          })
+        : null,
       state.page === "leaderboard" ? api("/leaderboard") : null,
     ]);
     if (epoch !== state.epoch || !state.user) return;
@@ -234,8 +256,12 @@ async function refresh() {
     notice(e.message);
     $("worker-status").textContent = "Connection unavailable";
     $("status-dot").classList.remove("ready");
+    if (state.page === "run")
+      RunPage.error("Connection interrupted. Retrying automatically…");
   } finally {
     state.busy = false;
+    // A route change during a poll must not leave the new run waiting on the old request.
+    if (state.selected !== selected && !state.unauthorized) refresh();
   }
 }
 function renderMetrics(catalog) {
@@ -256,6 +282,7 @@ async function initialize() {
   try {
     const session = await api("/auth/me");
     state.user = session.user;
+    state.sessionReady = true;
     state.csrf = session.csrf_token;
     state.unauthorized = false;
     $("access-button").textContent = state.user.username;
@@ -290,6 +317,7 @@ async function initialize() {
     $("refresh").disabled = false;
     $("refresh-leaderboard").disabled = false;
     notice();
+    route();
     await refresh();
   } catch (e) {
     if (e.status !== 401) notice(e.message);
@@ -308,12 +336,10 @@ $("submit-form").addEventListener("submit", async (event) => {
       method: "POST",
       body: JSON.stringify(Object.fromEntries(new FormData(event.target))),
     });
-    state.selected = result.id;
-    state.detailKey = "";
     state.offset = 0;
     notice();
+    openSubmission(result.id);
     renderDetail(result);
-    await refresh();
   } catch (e) {
     notice(e.message);
   } finally {
@@ -322,20 +348,9 @@ $("submit-form").addEventListener("submit", async (event) => {
       `${state.user ? "Submit compiler" : "Sign in to submit"} <span aria-hidden="true">→</span>`;
   }
 });
-async function openSubmission(id) {
-  state.selected = id;
-  state.detailKey = "";
-  try {
-    const result = await api(`/submissions/${state.selected}`);
-    if (result.id === state.selected) {
-      location.hash = "#submissions";
-      route();
-      renderDetail(result);
-      $("detail").scrollIntoView({ block: "start" });
-    }
-  } catch (e) {
-    notice(e.message);
-  }
+function openSubmission(id) {
+  location.hash = `#run/${encodeURIComponent(id)}`;
+  route();
 }
 $("submissions-body").addEventListener("click", (event) => {
   const button = event.target.closest("[data-id]");

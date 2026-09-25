@@ -2,6 +2,7 @@ import json
 import sqlite3
 import time
 import uuid
+from collections import Counter
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -76,6 +77,9 @@ class Database:
                 "repository_url": "TEXT NOT NULL DEFAULT ''",
                 "git_ref": "TEXT NOT NULL DEFAULT 'HEAD'",
                 "commit_sha": "TEXT NOT NULL DEFAULT ''",
+                "phase": "TEXT NOT NULL DEFAULT 'queued'",
+                "current_stage": "TEXT NOT NULL DEFAULT ''",
+                "current_case_id": "TEXT NOT NULL DEFAULT ''",
             }.items():
                 if name not in columns:
                     conn.execute(f"ALTER TABLE submissions ADD COLUMN {name} {definition}")
@@ -192,7 +196,7 @@ class Database:
             if row is None:
                 return None
             conn.execute(
-                """UPDATE submissions SET status='running', worker_id=?,
+                """UPDATE submissions SET status='running', phase='fetching', worker_id=?,
                 started_at=?, lease_until=? WHERE id=?""",
                 (worker_id, time.time(), time.time() + lease_seconds, row["id"]),
             )
@@ -229,6 +233,8 @@ class Database:
 
     def get(self, submission_id, details=True, owner_id=None):
         with self.connect() as conn:
+            # Counters and testcase results must describe the same polling snapshot.
+            conn.execute("BEGIN")
             row = conn.execute(
                 """SELECT submissions.*, users.username AS owner
                 FROM submissions LEFT JOIN users ON users.id=submissions.owner_id
@@ -238,7 +244,12 @@ class Database:
             if row is None:
                 return None
             result = dict(row)
-            result.pop("case_ids")
+            case_ids = json.loads(result.pop("case_ids"))
+            result["stage_counts"] = dict(
+                Counter(case_id.rsplit("@", 1)[1] for case_id in case_ids if "@" in case_id)
+            )
+            if result["status"] in TERMINAL:
+                result.update(phase="done", current_case_id="")
             result.pop("worker_id")
             result.pop("lease_until")
             result["suite"] = result["stage"]
@@ -277,6 +288,14 @@ class Database:
                 """UPDATE submissions SET commit_sha=?
                 WHERE id=? AND worker_id=? AND status='running'""",
                 (commit_sha, submission_id, worker_id),
+            )
+
+    def progress(self, submission_id, worker_id, phase, stage="", case_id=""):
+        with self.connect() as conn:
+            conn.execute(
+                """UPDATE submissions SET phase=?, current_stage=?, current_case_id=?
+                WHERE id=? AND worker_id=? AND status='running'""",
+                (phase, stage, case_id, submission_id, worker_id),
             )
 
     def cancelled(self, submission_id, worker_id):
@@ -334,7 +353,7 @@ class Database:
             )
             conn.execute(
                 """UPDATE submissions SET completed=completed+1, passed=passed+?,
-                cycles=cycles+? WHERE id=?""",
+                cycles=cycles+?, current_case_id='' WHERE id=?""",
                 (int(result["verdict"] == "accepted"), result["cycles"], submission_id),
             )
 

@@ -21,6 +21,8 @@
       crossorigin
     />
     <link rel="stylesheet" href="/static/style.css" />
+    <link rel="stylesheet" href="/static/run.css" />
+    <script src="/static/run.js" defer></script>
     <script src="/static/app.js" defer></script>
     <script src="/static/fellis.js" defer></script>
   </head>
@@ -342,13 +344,164 @@
               </form>
             </section>
           </div>
+        </div>
+      </section>
+      <section id="page-run" class="page run-page" hidden aria-labelledby="run-name">
+        <div class="run-topbar wrap">
+          <a href="#submissions" class="run-back">← All runs</a>
+          <div class="run-identity">
+            <h1 id="run-name" tabindex="-1">Loading your run…</h1>
+            <span id="run-meta"></span>
+          </div>
+          <span id="run-status"></span>
+          <button id="cancel-submission" class="button ghost small" hidden>
+            Cancel run
+          </button>
+        </div>
+        <p id="run-error" class="notice wrap" role="status" hidden></p>
+        <div id="run-content" hidden>
+          <div class="ride-runway wrap" id="ride-runway">
+            <div class="ride-sticky" id="ride-sticky">
+              <div class="ride-toolbar">
+                <ol
+                  id="ride-stages"
+                  class="ride-stages"
+                  aria-label="Test stages"
+                ></ol>
+                <button
+                  id="ride-motion"
+                  class="ride-motion"
+                  aria-pressed="false"
+                  aria-label="Pause animation"
+                >
+                  Ⅱ <span>Pause</span>
+                </button>
+              </div>
+              <div class="ride-grid">
+                <div class="ride-main">
+                  <figure
+                    id="ride-scene"
+                    class="ride-scene"
+                    data-theme="semantic"
+                    data-status="queued"
+                    aria-label="Ferris resting with one side of his feet on a skateboard, waiting for a worker."
+                  >
+                    <div class="ride-copy">
+                      <span id="ride-location" class="ride-location"
+                        >THE COAST · SEMANTIC ANALYSIS</span
+                      >
+                      <h2 id="ride-headline">Good things<br />take a moment.</h2>
+                      <p id="ride-caption">
+                        Ferris is saving your spot. We’ll roll as soon as a worker is
+                        ready.
+                      </p>
+                    </div>
+                    <span
+                      class="ride-scene-index"
+                      id="ride-scene-index"
+                      aria-hidden="true"
+                      >01 / 04</span
+                    >
+                    <div id="ride-art" class="ride-art" aria-hidden="true"></div>
+                    <div class="ride-scene-footer">
+                      <span id="ride-weather"
+                        >A little sea breeze. A little patience.</span
+                      ><span class="ride-direction" aria-hidden="true">ONWARD →</span>
+                    </div>
+                  </figure>
+                  <div class="ride-progress-panel">
+                    <div class="ride-progress-label">
+                      <span id="ride-progress-label">Waiting for a worker</span
+                      ><strong id="ride-percent">0%</strong>
+                    </div>
+                    <div
+                      id="ride-progress"
+                      class="ride-progress"
+                      role="progressbar"
+                      aria-label="Completed tests"
+                      aria-valuemin="0"
+                      aria-valuemax="100"
+                      aria-valuenow="0"
+                    >
+                      <span id="ride-progress-fill"></span>
+                    </div>
+                    <div class="ride-brief">
+                      <span class="ride-live-dot" aria-hidden="true"></span>
+                      <p id="ride-brief" role="status">
+                        Your compiler is in the queue.
+                      </p>
+                      <span id="ride-passed">0 passed</span>
+                    </div>
+                  </div>
+                </div>
+                <aside
+                  class="ride-live"
+                  id="ride-live"
+                  aria-labelledby="ride-live-title"
+                  inert
+                >
+                  <div class="ride-live-heading">
+                    <span class="eyebrow">UNDER THE HOOD</span>
+                    <h2 id="ride-live-title">The run, in detail.</h2>
+                    <span id="ride-live-status"></span>
+                  </div>
+                  <div class="ride-current">
+                    <span class="eyebrow">RIGHT NOW</span
+                    ><strong id="ride-current-label"></strong>
+                    <p id="ride-current-case"></p>
+                  </div>
+                  <div id="ride-stage-summary" class="ride-stage-summary"></div>
+                  <div class="ride-log-heading">
+                    <h3>System log</h3>
+                    <span>LIVE</span>
+                  </div>
+                  <div
+                    id="ride-log"
+                    class="ride-log"
+                    tabindex="0"
+                    role="region"
+                    aria-label="Recent judge activity"
+                  ></div>
+                  <button id="ride-all-results" class="ride-results-link">
+                    Explore all test results <span>↘</span>
+                  </button>
+                </aside>
+              </div>
+              <button id="ride-peek" class="ride-peek">
+                <span>↓</span> Scroll to look under the hood <span>↓</span>
+              </button>
+            </div>
+          </div>
           <section
-            id="detail"
-            class="detail-panel"
-            hidden
-            aria-live="polite"
-            aria-label="Submission details"
-          ></section>
+            id="run-report"
+            class="run-report wrap"
+            aria-labelledby="run-report-title"
+          >
+            <div class="run-report-heading">
+              <div>
+                <span class="eyebrow">EVERY CHECK COUNTS</span>
+                <h2 id="run-report-title">Test results & diagnostics</h2>
+              </div>
+              <span id="run-report-count"></span>
+            </div>
+            <div id="run-stage-cards" class="run-stage-cards"></div>
+            <div class="run-result-tools">
+              <label for="run-result-filter">Show tests</label
+              ><select id="run-result-filter">
+                <option value="all">All results</option>
+                <option value="failures">Failed tests</option>
+                <option value="semantic">Semantic</option>
+                <option value="ir">LLVM IR</option>
+                <option value="codegen">Code generation</option>
+                <option value="optimization">Optimization</option></select
+              ><span id="run-result-count"></span>
+            </div>
+            <div
+              id="detail"
+              class="detail-body"
+              aria-label="Submission diagnostics"
+            ></div>
+          </section>
         </div>
       </section>
       <section

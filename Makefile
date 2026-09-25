@@ -33,3 +33,4 @@ lint:
 	uv run ruff format --check .
 	node --check rx_oj/static/app.js
 	node --check rx_oj/static/fellis.js
+	node --check rx_oj/static/run.js

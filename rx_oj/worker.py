@@ -55,6 +55,7 @@ def process(db, client, settings, catalog, languages, job, worker_id, stopping):
         db.revision(job_id, worker_id, sha)
         settings.uploads_dir.mkdir(parents=True, exist_ok=True)
         (settings.uploads_dir / f"{job_id}.tar").write_bytes(source)
+        db.progress(job_id, worker_id, "building")
         execution, snapshot = judge.build(source)
         db.build_log(job_id, worker_id, execution.log)
         if execution.limit or execution.code:
@@ -75,7 +76,9 @@ def process(db, client, settings, catalog, languages, job, worker_id, stopping):
             if time.monotonic() >= deadline:
                 db.finish(job_id, worker_id, "time_limit", "Total submission time limit exceeded.")
                 return
-            result = judge.case(catalog.cases[case_id], snapshot)
+            case = catalog.cases[case_id]
+            db.progress(job_id, worker_id, "testing", case.stage, case_id)
+            result = judge.case(case, snapshot)
             db.record(job_id, worker_id, result)
             if result["verdict"] == "cancelled":
                 db.finish(job_id, worker_id, "cancelled", "Submission cancelled or worker stopped.")

@@ -418,6 +418,16 @@ Fellis illustration are bundled locally; see [asset sources and licenses](rx_oj/
 The landing page and testcase counts are visible before sign-in; submissions, results,
 and rankings still require an account.
 
+Submitting a compiler opens its dedicated `#run/<submission-id>` page. Run names and
+status badges in the history open the same page, and its URL can be reloaded or
+bookmarked. Ferris waits in the queue, skates through a different landscape for each
+stage, then steps off when the run ends. Progress signs and the loading bar reflect
+completed tests; workers also report repository fetching, building, and the current
+testcase. Scroll to bring the stage breakdown and recent activity beside the scene,
+then continue to filter testcase results and inspect build and testcase diagnostics.
+On smaller screens, these sections stack vertically. Animation can be paused and
+respects the system’s reduced-motion preference.
+
 ```sh
 make lint
 make test

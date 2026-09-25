@@ -15,3 +15,6 @@ All fonts and illustrations are served locally; the UI makes no third-party requ
   articulated claws, moving eye highlights, and an impact spark. Its clap is based on
   the [Ferris clapping loop](https://tenor.com/view/ferris-crab-cheer-clap-looping-gif-26403768)
   (five claps in 1.7 seconds). The GIF itself is not bundled or loaded by the page.
+- The run page in `run.js` reuses that CC0 Ferris body with articulated claws and
+  additional feet. Its skateboard, coastal scenery, woodland, mountains, and night
+  sky are local SVG artwork. CSS animates the scene without external assets.
