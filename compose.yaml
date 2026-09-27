@@ -40,13 +40,51 @@ services:
       - ${RX_TESTS_PATH:-./testcases}:/tests:ro
       - ./languages.toml:/app/languages.toml:ro
       - ${OJ_DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
-    depends_on: [api]
+    depends_on:
+      api:
+        condition: service_started
+      git-proxy:
+        condition: service_healthy
+        required: false
     read_only: true
     tmpfs:
       - /tmp:size=64m
     cap_drop: [ALL]
     security_opt: [no-new-privileges:true]
     stop_grace_period: 45s
+    restart: unless-stopped
+
+  git-proxy:
+    profiles: [git-proxy]
+    build:
+      context: .
+      dockerfile: docker/proxy.Dockerfile
+    image: rx-oj-git-proxy:local
+    # Reach a host loopback proxy; listen only on the Docker bridge address.
+    network_mode: host
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command:
+      - "TCP4-LISTEN:${OJ_GIT_PROXY_FORWARD_PORT:-17891},bind=host.docker.internal,reuseaddr,fork,max-children=64"
+      - "TCP4:127.0.0.1:${OJ_GIT_PROXY_HOST_PORT:-17890},connect-timeout=10"
+    user: "1000:1000"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    pids_limit: 128
+    mem_limit: 64m
+    healthcheck:
+      # Check the listener without opening an empty connection to the upstream proxy.
+      test:
+        - CMD-SHELL
+        - >-
+          awk -v port=$$(printf '%04X' ${OJ_GIT_PROXY_FORWARD_PORT:-17891})
+          '$$2 ~ ":" port "$$" && $$4 == "0A" { listening=1 } END { exit !listening }'
+          /proc/net/tcp
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
     restart: unless-stopped
 
   baseline:

@@ -1,4 +1,5 @@
 import os
+import socket
 import threading
 import time
 from dataclasses import replace
@@ -114,7 +115,8 @@ def test_hardening_limits_and_exit_status(settings, client):
         assert box.execute(["sleep", "100"], 5).limit == "cancelled"
 
 
-def test_git_fetch_uses_host_proxy(settings, client):
+@pytest.mark.parametrize("forward_loopback", [False, True])
+def test_git_fetch_uses_host_proxy(settings, client, forward_loopback):
     requests = []
 
     class Proxy(BaseHTTPRequestHandler):
@@ -126,13 +128,42 @@ def test_git_fetch_uses_host_proxy(settings, client):
         def log_message(self, *_):
             pass
 
-    with HTTPServer(("0.0.0.0", 0), Proxy) as proxy:
+    with HTTPServer(("127.0.0.1" if forward_loopback else "0.0.0.0", 0), Proxy) as proxy:
         thread = threading.Thread(target=proxy.serve_forever, daemon=True)
         thread.start()
+        relay = None
         try:
+            port = proxy.server_port
+            if forward_loopback:
+                with socket.socket() as listener:
+                    listener.bind(("0.0.0.0", 0))
+                    port = listener.getsockname()[1]
+                relay = client.containers.run(
+                    "rx-oj-git-proxy:local",
+                    [
+                        f"TCP4-LISTEN:{port},bind=host.docker.internal,reuseaddr,fork",
+                        f"TCP4:127.0.0.1:{proxy.server_port},connect-timeout=2",
+                    ],
+                    detach=True,
+                    network_mode="host",
+                    extra_hosts={"host.docker.internal": "host-gateway"},
+                    read_only=True,
+                    cap_drop=["ALL"],
+                    security_opt=["no-new-privileges:true"],
+                )
+                gateway = client.networks.get("bridge").attrs["IPAM"]["Config"][0]["Gateway"]
+                deadline = time.monotonic() + 5
+                while True:
+                    try:
+                        with socket.create_connection((gateway, port), timeout=0.2):
+                            break
+                    except OSError:
+                        if time.monotonic() >= deadline:
+                            pytest.fail("Proxy forwarder did not start")
+                        time.sleep(0.05)
             settings = replace(
                 settings,
-                git_proxy=f"http://host.docker.internal:{proxy.server_port}",
+                git_proxy=f"http://host.docker.internal:{port}",
                 git_hosts=("git-proxy-test.invalid",),
                 git_timeout=10,
             )
@@ -153,6 +184,8 @@ def test_git_fetch_uses_host_proxy(settings, client):
                 all=True, filters={"label": "rx-oj.submission=test-git-proxy"}
             )
         finally:
+            if relay is not None:
+                relay.remove(force=True)
             proxy.shutdown()
             thread.join(timeout=5)
 

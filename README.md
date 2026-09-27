@@ -377,20 +377,34 @@ DNS resolution, use `socks5h://host.docker.internal:7890`. A remote proxy URL al
 Leave `OJ_GIT_PROXY` unset or empty to connect directly. For a worker run without Compose,
 export the variable before starting it.
 
-The proxy must listen on an address reachable from Docker's bridge network. A listener
-bound only to `127.0.0.1` is not reachable through the host gateway. Enable a listener on
-the Docker bridge address in your proxy, or forward that address to its loopback port.
-For example, with `socat` installed on the Docker host:
+If your proxy listens only on the host's `127.0.0.1`, enable the optional Compose
+forwarder in `.env` (Linux Docker Engine):
 
-```sh
-proxy_bridge_ip="$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}')"
-socat "TCP-LISTEN:17890,bind=${proxy_bridge_ip},reuseaddr,fork" TCP:127.0.0.1:7890
+```dotenv
+COMPOSE_PROFILES=git-proxy
+OJ_GIT_PROXY_HOST_PORT=17890
+OJ_GIT_PROXY_FORWARD_PORT=17891
+OJ_GIT_PROXY=http://host.docker.internal:17891
 ```
 
-Keep the forwarder running and set `OJ_GIT_PROXY=http://host.docker.internal:17890` in
-`.env`, then run `make up`. Host firewall rules must allow the fetch containers to reach
-that port. No Compose `ports:` entry is needed for connections from a container to the host.
-The proxy is used only for Git fetching; compiler and testcase containers remain offline.
+Run `make up` to build and start the `git-proxy` service with the judge. It forwards
+Docker bridge port `17891` to the existing host loopback proxy on port `17890`.
+Set `OJ_GIT_PROXY_HOST_PORT` to your proxy's actual port; if you change
+`OJ_GIT_PROXY_FORWARD_PORT`, use that port in `OJ_GIT_PROXY` too. For a SOCKS5 upstream,
+use `socks5h://` in `OJ_GIT_PROXY`; the forwarder carries TCP without changing the protocol.
+If you already enable other Compose profiles, append `git-proxy` to the comma-separated list.
+
+The forwarder uses host networking to reach loopback and binds its listener only to
+the Docker bridge address. It runs as a non-root user with a read-only filesystem and
+no host mounts. The worker waits for its listener to be healthy when the profile is
+enabled. `make down` stops it with the judge, and Docker restarts it after a reboot.
+The original proxy must also be running. To disable forwarding, stop `git-proxy` before
+removing its profile from `.env`, then update or clear `OJ_GIT_PROXY` and run `make up`.
+Compose 2.20 or newer is required for the optional service dependency.
+
+Host firewall rules must allow fetch containers to reach the forwarded port. No Compose
+`ports:` entry or host systemd service is needed. The proxy is used only for Git fetching;
+compiler and testcase containers remain offline.
 
 ## API
 
@@ -497,6 +511,7 @@ Back to menu button returns to submissions.
 ```sh
 make lint
 make test
+docker compose --profile git-proxy build git-proxy  # Image for the loopback forwarding test
 make test-docker             # Requires Git, Python, C++, Rust, Clang, and REIMU images
 OJ_TEST_DOCKER=1 OJ_TEST_GIT_NETWORK=1 uv run pytest -q
 # The opt-in network test additionally uses Git and Rust images and public GitHub access.
