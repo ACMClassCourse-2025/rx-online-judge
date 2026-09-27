@@ -1,0 +1,121 @@
+.manage-hero {
+  padding-block: 44px 48px;
+  background: var(--green);
+  border-bottom: 8px solid var(--yellow);
+  color: #fff;
+}
+.manage-hero .eyebrow {
+  display: block;
+  margin-bottom: 16px;
+  color: #d6eee7;
+}
+.manage-hero h1 {
+  font-size: clamp(36px, 4.4vw, 60px);
+}
+.manage-hero p {
+  margin-top: 20px;
+  font-size: 20px;
+}
+.manage-content {
+  padding-block: 32px 64px;
+}
+.manage-filters {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 36px;
+}
+.manage-filters label {
+  margin-top: 0;
+}
+.manage-filter-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 10px;
+}
+.manage-table {
+  min-width: 940px;
+}
+.manage-table td {
+  vertical-align: top;
+}
+.manage-table .manage-repo {
+  max-width: 250px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.manage-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.manage-actions .button {
+  min-height: 34px;
+}
+.button.danger {
+  background: #a1263b;
+  border-color: #a1263b;
+  color: #fff;
+}
+.badge.voided {
+  color: #633942;
+  background: #f0e4e7;
+  border-color: #87515d;
+}
+.ride-info {
+  margin-top: 16px;
+  padding-block: 10px 0;
+  font-size: 12px;
+}
+.ride-info summary {
+  color: var(--run-accent);
+  cursor: pointer;
+}
+.ride-info dl {
+  margin-top: 12px;
+  overflow-wrap: anywhere;
+}
+.ride-info dt {
+  color: var(--muted);
+  margin-top: 10px;
+}
+.ride-info dd {
+  margin: 3px 0 0;
+}
+#run-void-info {
+  font-size: 12px;
+}
+#void-run-name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 760px) {
+  .manage-filters {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .manage-query {
+    grid-column: 1 / -1;
+  }
+  .manage-hero p {
+    font-size: 17px;
+  }
+}
+@media (max-width: 540px) {
+  .site-header:has(#manage-nav:not([hidden])) nav {
+    order: 3;
+    flex-basis: 100%;
+    margin-left: 0;
+    justify-content: space-between;
+  }
+  .site-header:has(#manage-nav:not([hidden])) .account-button {
+    margin-left: auto;
+  }
+  #manage-tools > .panel-heading {
+    align-items: flex-start;
+  }
+  #manage-tools > .panel-footer {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 16px;
+  }
+}

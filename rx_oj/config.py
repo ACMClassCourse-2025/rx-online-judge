@@ -28,6 +28,34 @@ class Settings:
         )
     )
     git_timeout: float = 120
+    dependency_timeout: float = field(
+        default_factory=lambda: float(os.getenv("OJ_DEPENDENCY_TIMEOUT", "180"))
+    )
+    dependency_proxy: str = field(
+        default_factory=lambda: os.getenv(
+            "OJ_DEPENDENCY_PROXY", os.getenv("OJ_GIT_PROXY", "")
+        ).strip()
+    )
+    dependency_hosts: tuple[str, ...] = field(
+        default_factory=lambda: tuple(
+            host.strip().lower()
+            for host in os.getenv(
+                "OJ_DEPENDENCY_HOSTS",
+                "index.crates.io,static.crates.io,crates.io,pypi.org,files.pythonhosted.org,"
+                "registry.npmjs.org,repo.maven.apache.org,repo1.maven.org",
+            ).split(",")
+            if host.strip()
+        )
+    )
+    dependency_cache_mb: int = field(
+        default_factory=lambda: max(0, int(os.getenv("OJ_DEPENDENCY_CACHE_MB", "2048")))
+    )
+    dependency_entry_mb: int = field(
+        default_factory=lambda: max(1, int(os.getenv("OJ_DEPENDENCY_ENTRY_MB", "128")))
+    )
+    dependency_cache_days: float = field(
+        default_factory=lambda: max(0, float(os.getenv("OJ_DEPENDENCY_CACHE_DAYS", "7")))
+    )
     runtime_image: str = field(
         default_factory=lambda: os.getenv("OJ_RUNTIME_IMAGE", "rx-oj-reimu:local")
     )

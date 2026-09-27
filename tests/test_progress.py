@@ -3,9 +3,11 @@ import threading
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+import pytest
 from fastapi.testclient import TestClient
 
 from rx_oj.api import create_app
+from rx_oj.archives import pack_files
 from rx_oj.db import Database
 from rx_oj.worker import process
 
@@ -95,7 +97,7 @@ def test_worker_publishes_fetch_build_and_each_current_test(
 
         def fetch(*_):
             observe()
-            return b"source", "a" * 40
+            return pack_files({"config.mk": b""}), "a" * 40
 
         class Judge:
             def __init__(self, *_):
@@ -156,3 +158,45 @@ def test_queued_cancel_and_expired_worker_report_no_active_test(settings, accoun
         assert result["status"] == "system_error"
         assert result["phase"] == "done" and result["current_case_id"] == ""
         assert result["current_stage"] == "semantic"
+
+
+@pytest.mark.parametrize("cancelled", [False, True])
+def test_worker_reports_dependency_failure_without_building(
+    settings, accounts, sign_in, monkeypatch, cancelled
+):
+    from rx_oj.dependencies import DependencyError
+
+    app = create_app(settings)
+    with TestClient(app) as client:
+        sign_in(client)
+        queued = enqueue(client)
+        db = app.state.db
+        job = db.claim("dependency-worker", 90)
+        source = pack_files({"config.mk": b"", "requirements.txt": b"example==1.0"})
+        monkeypatch.setattr("rx_oj.worker.fetch_repository", lambda *_: (source, "a" * 40))
+
+        def prepare(*_):
+            assert db.get(job["id"])["phase"] == "dependencies"
+            raise DependencyError("Package unavailable", cancelled=cancelled)
+
+        judge = Mock()
+        monkeypatch.setattr("rx_oj.worker.prepare_dependencies", prepare)
+        monkeypatch.setattr("rx_oj.worker.Judge", judge)
+        monkeypatch.setattr("rx_oj.worker.cleanup_job", lambda *_: None)
+        docker = Mock()
+        docker.images.get.return_value.id = "image-id"
+        process(
+            db,
+            docker,
+            settings,
+            app.state.catalog,
+            app.state.languages,
+            job,
+            "dependency-worker",
+            threading.Event(),
+        )
+        finished = client.get(f"/api/submissions/{queued['id']}").json()
+        assert finished["status"] == ("cancelled" if cancelled else "build_error")
+        assert "Package unavailable" in finished["build_log"]
+        judge.return_value.build.assert_not_called()
+        judge.return_value.case.assert_not_called()

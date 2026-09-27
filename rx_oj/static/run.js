@@ -178,6 +178,9 @@ const RunPage = (() => {
     el("run-error").hidden = true;
     el("run-content").hidden = false;
     el("cancel-submission").hidden = true;
+    el("void-submission").hidden = true;
+    el("run-void-info").hidden = true;
+    el("run-facts").replaceChildren();
     el("ride-log").replaceChildren();
     el("ride-live-body").scrollTop = 0;
     el("run-score").hidden = true;
@@ -242,6 +245,7 @@ const RunPage = (() => {
     if (s.status === "queued") return "Waiting for a worker";
     if (terminal(s.status)) return label(s.status);
     if (s.phase === "fetching") return "Fetching your repository";
+    if (s.phase === "dependencies") return "Preparing dependencies";
     if (s.phase === "building") return "Building your compiler";
     if (s.phase === "testing" || s.results.length)
       return `Testing · ${names[stage]}`;
@@ -270,7 +274,11 @@ const RunPage = (() => {
     let value = "Not scored";
     let description =
       "All four suites must pass to earn an optimization score.";
-    if (!terminal(s.status)) {
+    if (s.status === "voided") {
+      value = "Voided";
+      description =
+        "This run was voided by an administrator and does not count toward optimization scores.";
+    } else if (!terminal(s.status)) {
       value = "Pending";
       description = "Your score appears after all four suites pass.";
     } else if (s.status === "accepted") {
@@ -321,6 +329,26 @@ const RunPage = (() => {
     el("run-meta").textContent =
       `${languageName(s.language)} · ${s.id.slice(0, 8)}`;
     el("run-status").innerHTML = badge(s.status);
+    el("void-submission").hidden =
+      !state.user?.is_admin || s.status === "voided";
+    el("void-submission").onclick = () => ManagePage.confirmVoid(s);
+    el("run-void-info").hidden = s.status !== "voided";
+    el("run-void-info").textContent =
+      s.status === "voided"
+        ? `Voided by ${s.voided_by_name || "an administrator"}${s.voided_at ? ` · ${date(s.voided_at)}` : ""}. Previous status: ${label(s.status_before_void || "unknown")}. Excluded from optimization scoring.`
+        : "";
+    const facts = [
+      ["Account", s.owner || "Legacy submission"],
+      ["Run ID", s.id],
+      ["Suite", label(s.suite || s.stage)],
+      ["Repository", s.repository_url],
+      ["Ref", s.git_ref],
+      ["Commit", s.commit_sha || "Not resolved"],
+      ["Submitted", date(s.created_at)],
+    ];
+    el("run-facts").innerHTML = facts
+      .map(([name, value]) => `<dt>${name}</dt><dd>${escapeHTML(value)}</dd>`)
+      .join("");
     el("cancel-submission").hidden = done;
     el("cancel-submission").disabled = Boolean(s.cancel_requested);
     el("cancel-submission").textContent = s.cancel_requested
@@ -348,6 +376,9 @@ const RunPage = (() => {
     if (queued) {
       headline = "In the queue.";
       caption = "A little patience. The open road is just ahead.";
+    } else if (s.status === "voided") {
+      headline = "Voided.";
+      caption = "This run has been excluded from optimization scoring.";
     } else if (done) {
       caption = accepted
         ? "Every check passed. Take a moment to enjoy the view."
@@ -363,6 +394,9 @@ const RunPage = (() => {
     } else if (s.phase === "fetching") {
       headline = "Fetching source.";
       caption = "Picking up your code before we hit the road.";
+    } else if (s.phase === "dependencies") {
+      headline = "Preparing dependencies.";
+      caption = "Getting your compiler’s dependencies ready for the ride.";
     } else if (s.phase === "building") {
       headline = "Building your compiler.";
       caption = "Warming up the wheels. The first stretch is just ahead.";
@@ -388,7 +422,7 @@ const RunPage = (() => {
     el("ride-progress-fill").style.width = `${progress}%`;
     const brief = s.optimization_score
       ? `Optimization score ${scoreText(s.optimization_score.score)} · lower is better`
-      : queued || s.phase === "fetching" || s.phase === "building"
+      : queued || ["fetching", "dependencies", "building"].includes(s.phase)
         ? phase
         : `${done ? (accepted ? "All tests passed" : label(s.status)) : names[stage]} · ${number(s.completed)} / ${number(s.total)} checked`;
     if (el("ride-brief").textContent !== brief)
@@ -401,9 +435,11 @@ const RunPage = (() => {
           ? "Your compiler is in the queue."
           : s.phase === "fetching"
             ? s.repository_url
-            : s.phase === "building"
-              ? "Running the build from config.mk."
-              : `${number(s.passed)} of ${number(s.total)} tests passed.`;
+            : s.phase === "dependencies"
+              ? "Checking the dependency cache and downloading missing packages."
+              : s.phase === "building"
+                ? "Running the build from config.mk."
+                : `${number(s.passed)} of ${number(s.total)} tests passed.`;
     el("ride-stages").innerHTML = counts
       .map((c, i) => {
         const complete = c.total !== null && c.completed === c.total;

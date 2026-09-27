@@ -12,6 +12,7 @@ import docker
 from .catalog import Catalog, load_languages
 from .config import Settings
 from .db import Database
+from .dependencies import DependencyError, dependency_plan, prepare_dependencies
 from .grading import Judge
 from .repositories import RepositoryError, fetch_repository
 from .sandbox import ArtifactError, cleanup_job
@@ -55,8 +56,18 @@ def process(db, client, settings, catalog, languages, job, worker_id, stopping):
         db.revision(job_id, worker_id, sha)
         settings.uploads_dir.mkdir(parents=True, exist_ok=True)
         (settings.uploads_dir / f"{job_id}.tar").write_bytes(source)
+        dependencies = None
+        plan = dependency_plan(source, job["language"])
+        if plan:
+            db.progress(job_id, worker_id, "dependencies")
+            db.build_log(job_id, worker_id, f"Preparing {plan.manager} dependencies…\n")
+            dependencies = prepare_dependencies(
+                client, settings, job, image, source, plan, cancelled, deadline
+            )
         db.progress(job_id, worker_id, "building")
-        execution, snapshot = judge.build(source)
+        execution, snapshot = (
+            judge.build(source, dependencies) if dependencies else judge.build(source)
+        )
         db.build_log(job_id, worker_id, execution.log)
         if execution.limit or execution.code:
             status = "cancelled" if execution.limit == "cancelled" else "build_error"
@@ -87,6 +98,15 @@ def process(db, client, settings, catalog, languages, job, worker_id, stopping):
         db.finish(job_id, worker_id, "accepted" if passed == len(ids) else "failed")
     except RepositoryError as exc:
         db.finish(job_id, worker_id, "cancelled" if exc.cancelled else "source_error", str(exc))
+    except DependencyError as exc:
+        message = str(exc)[-settings.max_log_bytes :]
+        db.build_log(job_id, worker_id, message)
+        db.finish(
+            job_id,
+            worker_id,
+            "cancelled" if exc.cancelled else "build_error",
+            "Dependency preparation failed.",
+        )
     except ArtifactError as exc:
         db.finish(job_id, worker_id, "build_error", str(exc))
     except Exception:

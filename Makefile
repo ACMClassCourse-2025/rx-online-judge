@@ -37,3 +37,4 @@ lint:
 	node --check rx_oj/static/app.js
 	node --check rx_oj/static/fellis.js
 	node --check rx_oj/static/run.js
+	node --check rx_oj/static/manage.js

@@ -7,6 +7,10 @@ WORKDIR /workspace
 USER 1000:1000
 
 FROM base AS python
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends python3-pip python3-venv \
+    && rm -rf /var/lib/apt/lists/*
+USER 1000:1000
 
 FROM base AS cpp
 USER root
@@ -26,7 +30,7 @@ USER 1000:1000
 
 FROM base AS java
 USER root
-RUN apt-get update && apt-get install -y --no-install-recommends openjdk-21-jdk-headless \
+RUN apt-get update && apt-get install -y --no-install-recommends openjdk-21-jdk-headless maven \
     && rm -rf /var/lib/apt/lists/*
 ENV JAVA_TOOL_OPTIONS="-XX:ActiveProcessorCount=1 -XX:ReservedCodeCacheSize=64m -Xms16m -Xmx512m"
 USER 1000:1000

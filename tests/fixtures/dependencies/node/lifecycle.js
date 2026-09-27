@@ -1,0 +1,1 @@
+if (process.env.npm_config_offline !== 'true') process.exit(25); require('fs').writeFileSync('installed.txt', 'offline');

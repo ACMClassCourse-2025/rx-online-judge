@@ -22,7 +22,9 @@
     />
     <link rel="stylesheet" href="/static/style.css" />
     <link rel="stylesheet" href="/static/run.css" />
+    <link rel="stylesheet" href="/static/manage.css" />
     <script src="/static/run.js" defer></script>
+    <script src="/static/manage.js" defer></script>
     <script src="/static/app.js" defer></script>
     <script src="/static/fellis.js" defer></script>
   </head>
@@ -43,6 +45,9 @@
         >
         <a href="#leaderboard" class="nav-link" data-page="leaderboard"
           >Leaderboard</a
+        >
+        <a href="#manage" id="manage-nav" class="nav-link" data-page="manage" hidden
+          >Manage</a
         >
       </nav>
       <button class="button account-button" id="access-button">Sign in</button>
@@ -352,7 +357,7 @@
         aria-labelledby="run-name"
       >
         <h1 id="run-name" class="sr-only" tabindex="-1">Loading your run…</h1>
-        <a href="#submissions" class="run-back"
+        <a href="#submissions" id="run-back" class="run-back"
           >Back to menu <span aria-hidden="true">↗</span></a
         >
         <p id="run-error" class="notice" role="status" hidden></p>
@@ -439,8 +444,16 @@
                         class="button ghost small"
                         hidden
                       >
-                        Cancel run
+                      Cancel run
                       </button>
+                      <button id="void-submission" class="button ghost small" hidden>
+                        Void run
+                      </button>
+                      <p id="run-void-info" class="notice" hidden></p>
+                      <details class="ride-info">
+                        <summary>Run details</summary>
+                        <dl id="run-facts"></dl>
+                      </details>
                     </div>
                     <section
                       id="run-score"
@@ -558,6 +571,141 @@
           </section>
         </div>
       </section>
+      <section
+        id="page-manage"
+        class="page"
+        hidden
+        aria-labelledby="manage-title"
+      >
+        <div class="manage-hero">
+          <div class="wrap">
+            <span class="eyebrow">ADMINISTRATION</span>
+            <h1 id="manage-title">Manage runs.</h1>
+            <p>Find a run. Follow its progress. Keep the scores fair.</p>
+          </div>
+        </div>
+        <div class="wrap manage-content">
+          <p id="manage-access" class="notice" role="status">
+            Sign in as an administrator to manage runs.
+          </p>
+          <div id="manage-tools" hidden>
+            <form id="manage-search" class="manage-filters" role="search">
+              <div class="manage-query">
+                <label for="manage-query">Search runs</label>
+                <input
+                  id="manage-query"
+                  name="q"
+                  type="search"
+                  maxlength="200"
+                  placeholder="Name, account, run ID, repository, ref or commit"
+                />
+              </div>
+              <div>
+                <label for="manage-status">Status</label>
+                <select id="manage-status" name="status">
+                  <option value="">All statuses</option>
+                  <option value="queued">Queued</option>
+                  <option value="running">Running</option>
+                  <option value="accepted">Accepted</option>
+                  <option value="failed">Failed</option>
+                  <option value="build_error">Build error</option>
+                  <option value="source_error">Source error</option>
+                  <option value="system_error">System error</option>
+                  <option value="cancelled">Cancelled</option>
+                  <option value="time_limit">Time limit</option>
+                  <option value="voided">Voided</option>
+                </select>
+              </div>
+              <div>
+                <label for="manage-suite">Suite</label>
+                <select id="manage-suite" name="suite">
+                  <option value="">All suites</option>
+                  <option value="semantic">Semantic</option>
+                  <option value="ir">LLVM IR</option>
+                  <option value="codegen">Codegen</option>
+                  <option value="optimization">Optimization</option>
+                </select>
+              </div>
+              <div>
+                <label for="manage-language">Language</label>
+                <select id="manage-language" name="language">
+                  <option value="">All languages</option>
+                </select>
+              </div>
+              <div class="manage-filter-actions">
+                <button class="button primary" type="submit">Search</button>
+                <button class="button ghost" type="reset">Clear</button>
+              </div>
+            </form>
+            <p id="manage-error" class="notice" role="alert" hidden></p>
+            <div class="panel-heading">
+              <div>
+                <h2 class="underlined">
+                  All runs <span id="manage-count" class="count">0</span>
+                </h2>
+                <p>
+                  Voided runs keep their history and do not count toward
+                  optimization scores.
+                </p>
+              </div>
+              <button
+                id="manage-refresh"
+                class="icon-button"
+                type="button"
+                aria-label="Refresh runs"
+                title="Refresh runs"
+              >
+                ↻
+              </button>
+            </div>
+            <div
+              class="table-scroll"
+              tabindex="0"
+              role="region"
+              aria-label="All runs"
+            >
+              <table class="manage-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Run</th>
+                    <th scope="col">Account</th>
+                    <th scope="col">Suite / language</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Passed</th>
+                    <th scope="col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="manage-body"></tbody>
+              </table>
+            </div>
+            <div id="manage-empty" class="empty" hidden>
+              <h3>No matching runs.</h3>
+              <p>Try another search or clear the filters.</p>
+            </div>
+            <div class="panel-footer">
+              <span id="manage-pagination" role="status">Loading runs…</span>
+              <div class="pagination-buttons">
+                <button
+                  id="manage-previous"
+                  class="button ghost small"
+                  type="button"
+                  disabled
+                >
+                  ← Previous
+                </button>
+                <button
+                  id="manage-next"
+                  class="button ghost small"
+                  type="button"
+                  disabled
+                >
+                  Next →
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
     </main>
     <footer class="site-footer">
       <div class="wrap">
@@ -571,6 +719,31 @@
         <span class="footer-target">RV32IM / REIMU</span>
       </div>
     </footer>
+    <dialog
+      id="void-dialog"
+      aria-labelledby="void-title"
+      aria-describedby="void-help"
+    >
+      <form id="void-form">
+        <span class="eyebrow">ADMINISTRATION</span>
+        <h2 id="void-title">Void this run?</h2>
+        <p id="void-run-name"></p>
+        <p id="void-help">
+          This marks the run as Voided and excludes it from optimization
+          scoring. Any active work will stop. Logs and testcase results stay
+          available.
+        </p>
+        <p id="void-error" class="notice" role="alert" hidden></p>
+        <div class="dialog-actions">
+          <button id="void-close" type="button" class="button ghost" autofocus>
+            Keep run
+          </button>
+          <button id="void-confirm" type="submit" class="button danger">
+            Void run
+          </button>
+        </div>
+      </form>
+    </dialog>
     <dialog id="login-dialog" aria-labelledby="login-title">
       <button
         type="button"

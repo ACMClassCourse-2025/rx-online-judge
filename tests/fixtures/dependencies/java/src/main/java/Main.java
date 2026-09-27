@@ -1,0 +1,1 @@
+import org.apache.commons.lang3.StringUtils; class Main { public static void main(String[] args) { if (!StringUtils.isNumeric("42")) throw new RuntimeException(); } }

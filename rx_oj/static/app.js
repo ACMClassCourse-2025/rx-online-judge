@@ -9,11 +9,13 @@ const state = {
   detailKey: "",
   leaderboardKey: "",
   page: "submissions",
+  runOrigin: "submissions",
   unauthorized: true,
   sessionReady: false,
   user: null,
   csrf: "",
   epoch: 0,
+  revision: 0,
 };
 const escapeHTML = (value) =>
   String(value ?? "").replace(
@@ -59,7 +61,9 @@ function clearSession() {
   state.selected = null;
   state.detailKey = "";
   state.offset = 0;
+  state.runOrigin = "submissions";
   RunPage.reset();
+  ManagePage.reset();
   if (state.page === "run") RunPage.error("Sign in to view this run.");
   renderSubmissions({ items: [], total: 0 });
   renderLeaderboard({ status: "signed_out", items: [] });
@@ -114,7 +118,9 @@ function route() {
     ? "run"
     : location.hash === "#leaderboard"
       ? "leaderboard"
-      : "submissions";
+      : location.hash === "#manage"
+        ? "manage"
+        : "submissions";
   const selected = run?.[1] || null;
   const changed = page !== state.page || selected !== state.selected;
   if (selected !== state.selected) {
@@ -127,12 +133,16 @@ function route() {
     section.hidden = section.id !== `page-${state.page}`;
   for (const link of document.querySelectorAll(".nav-link")) {
     const active =
-      link.dataset.page === (page === "run" ? "submissions" : page);
+      link.dataset.page === (page === "run" ? state.runOrigin : page);
     link.classList.toggle("active", active);
     if (active) link.setAttribute("aria-current", "page");
     else link.removeAttribute("aria-current");
   }
   RunPage.activate(page === "run");
+  ManagePage.activate();
+  $("run-back").href = `#${state.runOrigin}`;
+  $("run-back").innerHTML =
+    `${state.runOrigin === "manage" ? "Back to manage" : "Back to menu"} <span aria-hidden="true">↗</span>`;
   if (page !== "run" || changed)
     document.title = `${page === "run" ? "Your run" : label(page)} · Rx Compiler Judge`;
   if (changed) {
@@ -215,12 +225,15 @@ function renderDetail(s) {
 $("cancel-submission").onclick = async () => {
   const id = state.selected;
   if (!id) return;
+  const epoch = state.epoch;
   $("cancel-submission").disabled = true;
   try {
     const result = await api(`/submissions/${id}/cancel`, { method: "POST" });
+    if (epoch !== state.epoch) return;
+    state.revision++;
     if (state.selected === id) renderDetail(result);
   } catch (e) {
-    if (state.selected === id) {
+    if (epoch === state.epoch && state.selected === id) {
       RunPage.error(e.message);
       $("cancel-submission").disabled = false;
     }
@@ -228,8 +241,10 @@ $("cancel-submission").onclick = async () => {
 };
 async function refresh() {
   if (state.busy || state.unauthorized) return;
+  if (state.page === "manage") ManagePage.load();
   state.busy = true;
   const epoch = state.epoch;
+  const revision = state.revision;
   const selected = state.selected;
   try {
     const [submissions, health, detail, rankings] = await Promise.all([
@@ -244,7 +259,8 @@ async function refresh() {
         : null,
       state.page === "leaderboard" ? api("/leaderboard") : null,
     ]);
-    if (epoch !== state.epoch || !state.user) return;
+    if (epoch !== state.epoch || revision !== state.revision || !state.user)
+      return;
     renderSubmissions(submissions);
     if (rankings) renderLeaderboard(rankings);
     $("worker-status").textContent = health.workers.length
@@ -261,7 +277,11 @@ async function refresh() {
   } finally {
     state.busy = false;
     // A route change during a poll must not leave the new run waiting on the old request.
-    if (state.selected !== selected && !state.unauthorized) refresh();
+    if (
+      (state.selected !== selected || revision !== state.revision) &&
+      !state.unauthorized
+    )
+      refresh();
   }
 }
 function renderMetrics(catalog) {
@@ -348,7 +368,8 @@ $("submit-form").addEventListener("submit", async (event) => {
       `${state.user ? "Submit compiler" : "Sign in to submit"} <span aria-hidden="true">→</span>`;
   }
 });
-function openSubmission(id) {
+function openSubmission(id, origin = "submissions") {
+  state.runOrigin = origin;
   location.hash = `#run/${encodeURIComponent(id)}`;
   route();
 }

@@ -113,6 +113,7 @@ def test_geometric_mean_weights_testcases_equally(scoring_setup):
         ("status", "failed"),
         ("status", "running"),
         ("status", "cancelled"),
+        ("status", "voided"),
         ("stage", "codegen"),
         ("catalog_version", "old"),
         ("total", 1),
@@ -297,3 +298,32 @@ def test_missing_baseline_returns_helpful_empty_state(scoring_setup, accounts, s
         detail = api.get(f"/api/submissions/{submission_id}").json()
         assert detail["optimization_score"] is None
         assert detail["optimization_baseline_status"] == "missing"
+
+
+def test_voided_scores_are_removed_and_next_best_run_counts(scoring_setup, accounts, sign_in):
+    settings, catalog, baseline = scoring_setup
+    db = Database(settings.db_path)
+    db.activate_baseline(baseline)
+    best = store_submission(db, catalog, accounts["alice"], (50, 50))
+    backup = store_submission(db, catalog, accounts["alice"], (100, 100))
+    bob = store_submission(db, catalog, accounts["bob"], (80, 80))
+    with TestClient(create_app(settings)) as api:
+        sign_in(api, "admin")
+        before = api.get(f"/api/submissions/{best}").json()
+        assert before["optimization_score"]["score"] == 0.5
+        assert api.get("/api/leaderboard").json()["items"][0]["submission_id"] == best
+        response = api.post(f"/api/admin/submissions/{best}/void")
+        assert response.status_code == 200
+        assert response.json()["optimization_score"] is None
+        assert response.json()["results"] == before["results"]
+        rankings = api.get("/api/leaderboard").json()["items"]
+        assert [row["submission_id"] for row in rankings] == [bob, backup]
+        assert [row["rank"] for row in rankings] == [1, 2]
+        assert rankings[1]["score"] == 1
+        assert best not in {row["id"] for row in db.leaderboard_candidates(catalog.version)}
+        api.post(f"/api/admin/submissions/{backup}/void")
+        assert [row["submission_id"] for row in api.get("/api/leaderboard").json()["items"]] == [
+            bob
+        ]
+        sign_in(api)
+        assert api.get(f"/api/submissions/{best}").json()["optimization_score"] is None

@@ -1,0 +1,19 @@
+<settings xmlns="http://maven.apache.org/SETTINGS/1.2.0">
+  <localRepository>/workspace/.rx-oj-deps/maven</localRepository>
+  <mirrors>
+    <mirror>
+      <id>judge-central</id>
+      <mirrorOf>*</mirrorOf>
+      <url>https://repo.maven.apache.org/maven2</url>
+    </mirror>
+  </mirrors>
+  <proxies>
+    <proxy>
+      <id>judge-dependencies</id>
+      <active>true</active>
+      <protocol>http</protocol>
+      <host>dependency-proxy</host>
+      <port>3128</port>
+    </proxy>
+  </proxies>
+</settings>

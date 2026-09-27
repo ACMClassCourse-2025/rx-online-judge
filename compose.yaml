@@ -35,6 +35,12 @@ services:
       OJ_IR_IMAGE: ${OJ_IR_IMAGE:-rx-oj-clang:local}
       OJ_GIT_HOSTS: ${OJ_GIT_HOSTS:-github.com,gitlab.com,codeberg.org,gitee.com}
       OJ_GIT_PROXY: ${OJ_GIT_PROXY:-}
+      OJ_DEPENDENCY_PROXY: ${OJ_DEPENDENCY_PROXY:-${OJ_GIT_PROXY:-}}
+      OJ_DEPENDENCY_HOSTS: ${OJ_DEPENDENCY_HOSTS:-index.crates.io,static.crates.io,crates.io,pypi.org,files.pythonhosted.org,registry.npmjs.org,repo.maven.apache.org,repo1.maven.org}
+      OJ_DEPENDENCY_TIMEOUT: ${OJ_DEPENDENCY_TIMEOUT:-180}
+      OJ_DEPENDENCY_CACHE_MB: ${OJ_DEPENDENCY_CACHE_MB:-2048}
+      OJ_DEPENDENCY_ENTRY_MB: ${OJ_DEPENDENCY_ENTRY_MB:-128}
+      OJ_DEPENDENCY_CACHE_DAYS: ${OJ_DEPENDENCY_CACHE_DAYS:-7}
     volumes:
       - judge-data:/data
       - ${RX_TESTS_PATH:-./testcases}:/tests:ro

@@ -210,7 +210,7 @@ local paths, arbitrary transports, or uploaded archives. The default allowed hos
 `OJ_GIT_HOSTS` identically on API and worker for other trusted public HTTPS Git hosts.
 Git redirects, interactive prompts, credential helpers, hooks, recursive submodules,
 and automatic Git LFS downloads are disabled. Use the canonical repository URL if it has
-moved. Commit all required source/dependency files directly into the repository.
+moved. Commit all required source files and dependency manifests/lockfiles to the repository.
 
 The repository must contain `config.mk` and the compiler source at its root. Ordinary
 file symlinks, such as the template's README link, are materialized safely inside the
@@ -273,13 +273,91 @@ limits. Only emitted IR enters the Clang container. Student build scripts and Ma
 expressions execute in the language sandbox; neither repository `RUN` nor repository
 Clang commands control judging. LLVM IR compilation errors appear in case diagnostics.
 
-Implementation images support C/C++ (GCC 14), Rust 1.95 with the RV32IM target, Python 3.13,
-Java 21, and Node.js 22. Build and execution containers have no network access; vendor
-all dependencies or install them in operator-owned images. The tiny compilers in
+Implementation images support C/C++ (GCC 14), Rust 1.95 with the RV32IM target, Python 3.13
+with pip and venv, Java 21 with Maven, and Node.js 22 with npm. Build and execution
+containers have no network access. Supported package dependencies are prepared separately
+as described below; other dependencies must be vendored or installed in operator-owned images.
+The tiny compilers in
 `examples/python` and `examples/cpp` support only `tests/fixtures/suites` for installation
 checks; they are not complete Rx compilers. Both demonstrate a shared runtime function
 called from LLVM IR and direct assembly. The Rust reference embeds its runtime with
 LTO and leaves `{runtime}` empty.
+
+### Dependency preparation and caching
+
+After fetching source, the worker automatically detects the selected language's manifest
+at the repository root. It prepares dependencies in a separate sandbox, then starts a
+fresh **offline** sandbox with the original source and downloaded dependencies. `config.mk`
+and submitted build commands are never evaluated by the worker or by the proxy.
+
+| Language | Required files | Preparation and offline use |
+|---|---|---|
+| Rust | `Cargo.toml`, `Cargo.lock` | `cargo fetch --locked`; `BUILD` uses the prepared Cargo cache |
+| Python | `requirements.txt` | Download wheels with `--require-hashes --only-binary=:all:`; install offline into `/workspace/.venv` |
+| JavaScript | `package.json`, `package-lock.json` | `npm ci --ignore-scripts`; repeat `npm ci --offline` with lifecycle scripts enabled in the build sandbox |
+| Java | `pom.xml` | Maven `dependency:go-offline`; `BUILD` uses the local repository with offline mode enabled |
+| C/C++ | — | Include dependencies in the repository or operator-owned image |
+
+Python requirements must pin all direct and transitive packages with hashes. Source-only
+Python distributions are unsupported; a wheel compatible with the image's Python and
+platform must exist. Build and testcase commands automatically use the prepared Python
+virtual environment. npm install scripts run only during the offline build; scripts that
+download additional files must be replaced with vendored files or operator-provided tools.
+Maven versions should be pinned; Maven has no universal lockfile, and plugins that fetch
+additional resources during compilation must be supplied those resources offline.
+
+For a project in a subdirectory, commit `.rx-oj.toml` at the repository root:
+
+```toml
+[dependencies]
+directory = "crates/compiler"
+```
+
+Only the selected language's package manager is used. If there is no manifest, the
+existing build flow is used. Set `[dependencies] enabled = false` in `.rx-oj.toml` to
+skip automatic preparation for a fully vendored project. `.rx-oj-deps` is reserved for
+the judge's dependency files; do not commit it. Project dependencies, build commands,
+and source remain untrusted and run only in sandboxes.
+
+Downloads use an ephemeral HTTPS proxy connected to an isolated Docker network. The
+preparation container has no direct Internet route or host bridge address. The proxy
+allows only configured registry hostnames on port 443, rejects private/local DNS answers,
+and connects to the validated public addresses. It contains no source, tests, credentials
+from the submission, or host mounts. The default registries are crates.io, PyPI, npm, and
+Maven Central; arbitrary Git dependencies and custom registries are not supported by default.
+Compilation, Clang lowering, and REIMU execution remain network-disabled.
+
+Successful dependency snapshots are cached under `/data/dependency-cache` (or
+`$OJ_DATA_DIR/dependency-cache` locally). Cache keys include the account, repository URL,
+exact toolchain image ID, registry policy, dependency directory, and manifests/lockfiles
+and package-manager configuration. Maven also includes the complete source because its
+plugins can consult project files. Rust, Python, and npm can reuse downloads after
+source-only changes. Cached files never cross accounts or repositories. Each build gets
+its own copy; build scripts and testcase processes cannot modify the shared cache.
+
+Repeat submissions skip downloads on a cache hit, which is shown in the build log.
+The compiler is rebuilt and every testcase is rerun. Failed or cancelled preparation
+is not cached. Cache writes are atomic across workers, entries are checksummed, and old
+entries are evicted by least recent use. No submitted archive is extracted onto the host.
+
+Worker settings (also configurable in Compose through `.env`):
+
+| Setting | Default | Purpose |
+|---|---|---|
+| `OJ_DEPENDENCY_TIMEOUT` | `180` | Preparation time limit in seconds |
+| `OJ_DEPENDENCY_ENTRY_MB` | `128` | Maximum dependency snapshot per project |
+| `OJ_DEPENDENCY_CACHE_MB` | `2048` | Total retained cache size; `0` disables reuse |
+| `OJ_DEPENDENCY_CACHE_DAYS` | `7` | Evict entries unused for this many days |
+| `OJ_DEPENDENCY_HOSTS` | Built-in registry allowlist | Comma-separated exact public HTTPS hostnames |
+| `OJ_DEPENDENCY_PROXY` | `OJ_GIT_PROXY` when unset | Optional HTTP/HTTPS upstream proxy, used only by the registry proxy |
+
+The existing workspace and build-snapshot limits still apply. Dependency data shares
+the workspace budget with source and build artifacts. The upstream dependency proxy can
+use the existing Compose Git proxy forwarder; for a SOCKS Git proxy, provide a separate
+HTTP/HTTPS endpoint in `OJ_DEPENDENCY_PROXY`.
+
+After upgrading, rebuild the language images with `make images`, then recreate the
+application with `make up`.
 
 ## Architecture and limits
 
@@ -291,6 +369,10 @@ flowchart LR
   Worker --> Git[Networked Git fetch container]
   Git --> Source[Source snapshot + commit SHA]
   Source --> Build[Offline language container: build]
+  Source --> Dependencies[Dependency preparation sandbox]
+  Dependencies --> Proxy[Registry allowlist proxy]
+  Dependencies --> Cache[(Account and repository dependency cache)]
+  Cache --> Build
   Build --> Compile[Fresh offline compiler container per case]
   Build --> Runtime[Captured runtime.s]
   Compile -->|IR: .ll| Clang[Trusted Clang 22 container]
@@ -311,6 +393,8 @@ capabilities dropped, no-new-privileges, default Docker seccomp, and cgroup limi
 | Resource | Default |
 |---|---:|
 | Git fetch time | 120 seconds |
+| Dependency preparation time / snapshot | 180 seconds / 128 MiB |
+| Shared dependency cache / idle retention | 2 GiB / 7 days |
 | Exported source / file count | 64 MiB / 10,000 |
 | Built compiler snapshot | 256 MiB |
 | Workspace / temporary directory | 512 MiB / 64 MiB |
@@ -403,8 +487,9 @@ removing its profile from `.env`, then update or clear `OJ_GIT_PROXY` and run `m
 Compose 2.20 or newer is required for the optional service dependency.
 
 Host firewall rules must allow fetch containers to reach the forwarded port. No Compose
-`ports:` entry or host systemd service is needed. The proxy is used only for Git fetching;
-compiler and testcase containers remain offline.
+`ports:` entry or host systemd service is needed. This proxy serves Git fetching and,
+by default, the registry proxy for dependency preparation. Compiler build and testcase
+containers remain offline.
 
 ## API
 
@@ -427,6 +512,8 @@ POST requests other than login require `X-CSRF-Token`, returned by login and `/a
 | GET | `/api/submissions?limit=30&offset=0` | Visible submission history |
 | GET | `/api/submissions/{id}` | Results, Git revision, diagnostics, and optimization score |
 | POST | `/api/submissions/{id}/cancel` | Cancel owned submission (or any as administrator) |
+| GET | `/api/admin/submissions` | Administrator search across all runs, with pagination and filters |
+| POST | `/api/admin/submissions/{id}/void` | Administrator marks a run Voided and excludes its score |
 
 Submission JSON:
 
@@ -446,7 +533,22 @@ Submission JSON:
 Extra fields such as `filter`, `stage`, and `case_ids` are rejected. Other users' submissions
 return 404 to students. `source_error` indicates a repository fetch/ref/source-layout problem;
 `build_error` indicates a compiler build failure. Other terminal states include `accepted`,
-`failed`, `time_limit`, `cancelled`, and `system_error`.
+`failed`, `time_limit`, `cancelled`, `system_error`, and `voided`.
+
+Administrators have a **Manage** page at `/#manage`. Search by run name, account, run ID,
+repository URL, Git ref, or commit SHA; combine the search with status, suite, and language
+filters. The API accepts `q` (a literal, case-insensitive substring), `status`, `suite`,
+`language`, `limit` (1–100, default 20), and `offset`. Inspect opens the full run page with
+source details, build logs, testcase results, and any eligible optimization score.
+
+Cancel stops queued or active runs. **Void** is an administrator-only terminal action:
+it marks any run `voided`, stops active work, and removes its optimization score from the
+leaderboard. The account's next best eligible run counts automatically. Voiding preserves
+logs, testcase results, the original completion time, and `status_before_void`; details
+also report `voided_at`, `voided_by` (account ID), and `voided_by_name`. Repeating the action
+preserves the first audit record. Workers cannot overwrite a voided run. Database columns
+are added automatically at startup, preserving existing history. Owners can still inspect
+their voided runs, but only administrators can search all accounts or void a run.
 
 The leaderboard reports `status: ready`, `missing`, or `stale`. Scores are calculated from
 the active baseline at read time. Each ranked entry includes `rank`, `username`, `score`,
@@ -520,6 +622,8 @@ docker compose --profile git-proxy build git-proxy  # Image for the loopback for
 make test-docker             # Requires Git, Python, C++, Rust, Clang, and REIMU images
 OJ_TEST_DOCKER=1 OJ_TEST_GIT_NETWORK=1 uv run pytest -q
 # The opt-in network test additionally uses Git and Rust images and public GitHub access.
+OJ_TEST_DOCKER=1 OJ_TEST_DEPENDENCY_NETWORK=1 uv run pytest tests/test_dependency_docker.py
+# Requires Python, Rust, Node, and Java images plus access to the public package registries.
 ```
 
 Tests cover accounts, password resets, expiry, CSRF, ownership, administrator access,

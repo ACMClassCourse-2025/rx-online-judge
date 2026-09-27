@@ -71,6 +71,13 @@ def create_app(settings: Settings | None = None):
 
     Authenticated = Annotated[dict, Depends(authenticate)]
 
+    def require_admin(user: Authenticated):
+        if not user["is_admin"]:
+            raise HTTPException(403, "Administrator access required")
+        return user
+
+    Administrator = Annotated[dict, Depends(require_admin)]
+
     def visibility(user):
         return None if user["is_admin"] else user["id"]
 
@@ -187,6 +194,32 @@ def create_app(settings: Settings | None = None):
     def rankings(user: Authenticated):
         return leaderboard(app.state.db, app.state.catalog, user)
 
+    @app.get("/api/admin/submissions")
+    def manage_submissions(
+        user: Administrator,
+        limit: Annotated[int, Query(ge=1, le=100)] = 20,
+        offset: Annotated[int, Query(ge=0)] = 0,
+        q: Annotated[str, Query(max_length=200)] = "",
+        status: Literal[
+            "",
+            "queued",
+            "running",
+            "accepted",
+            "failed",
+            "build_error",
+            "source_error",
+            "system_error",
+            "cancelled",
+            "time_limit",
+            "voided",
+        ] = "",
+        suite: Literal["", "semantic", "ir", "codegen", "optimization"] = "",
+        language: Annotated[str, Query(max_length=40)] = "",
+    ):
+        return app.state.db.listing(
+            limit, offset, q=q.strip(), status=status, suite=suite, language=language
+        )
+
     @app.get("/api/submissions/{submission_id}")
     def submission(submission_id: str, user: Authenticated):
         result = app.state.db.get(submission_id, owner_id=visibility(user))
@@ -202,7 +235,14 @@ def create_app(settings: Settings | None = None):
         if app.state.db.get(submission_id, details=False, owner_id=visibility(user)) is None:
             raise HTTPException(404, "Submission not found")
         app.state.db.cancel(submission_id)
-        return app.state.db.get(submission_id, owner_id=visibility(user))
+        return submission(submission_id, user)
+
+    @app.post("/api/admin/submissions/{submission_id}/void")
+    def void_submission(submission_id: str, user: Administrator):
+        if app.state.db.get(submission_id, details=False) is None:
+            raise HTTPException(404, "Submission not found")
+        app.state.db.void(submission_id, user["id"])
+        return submission(submission_id, user)
 
     @app.post("/api/submissions", status_code=202)
     def submit(body: Submission, user: Authenticated):

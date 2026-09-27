@@ -41,6 +41,8 @@ class Sandbox:
         cancelled=lambda: False,
         runtime=False,
         network=False,
+        network_name=None,
+        environment=None,
     ):
         self.client = client
         self.settings = settings
@@ -49,6 +51,8 @@ class Sandbox:
         self.cancelled = cancelled
         self.runtime = runtime
         self.network = network
+        self.network_name = network_name
+        self.environment = environment or {}
         self.container = None
 
     def __enter__(self):
@@ -61,8 +65,8 @@ class Sandbox:
             user="1000:1000",
             working_dir="/workspace",
             read_only=True,
-            network_disabled=not self.network,
-            network_mode="bridge" if self.network else "none",
+            network_disabled=not (self.network or self.network_name),
+            network_mode=self.network_name or ("bridge" if self.network else "none"),
             # Git fetch containers need their own mapping to a proxy on the Docker host.
             extra_hosts=(
                 {"host.docker.internal": "host-gateway"}
@@ -92,6 +96,7 @@ class Sandbox:
                 "TMPDIR": "/tmp",
                 "CARGO_NET_OFFLINE": "true",
                 "PYTHONDONTWRITEBYTECODE": "1",
+                **self.environment,
             },
             labels={"rx-oj.managed": "true", "rx-oj.submission": self.job_id},
             runtime=self.settings.docker_runtime,
@@ -245,3 +250,7 @@ def cleanup_job(client, submission_id):
         all=True, filters={"label": ["rx-oj.managed=true", f"rx-oj.submission={submission_id}"]}
     ):
         container.remove(force=True)
+    for network in client.networks.list(
+        filters={"label": ["rx-oj.managed=true", f"rx-oj.submission={submission_id}"]}
+    ):
+        network.remove()

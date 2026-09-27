@@ -9,6 +9,9 @@ import sys
 
 
 def main():
+    if os.path.isfile("/workspace/.venv/bin/python"):
+        os.environ["PATH"] = "/workspace/.venv/bin:" + os.environ["PATH"]
+        os.environ["VIRTUAL_ENV"] = "/workspace/.venv"
     stage = sys.argv[1]
     resolved = subprocess.run(
         ["make", "--no-print-directory", "-s", "-f", "/opt/rx-oj/commands.mk", "rx-oj-commands"],

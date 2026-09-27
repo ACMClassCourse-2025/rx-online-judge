@@ -14,6 +14,7 @@ TERMINAL = {
     "system_error",
     "cancelled",
     "time_limit",
+    "voided",
 }
 
 
@@ -80,6 +81,9 @@ class Database:
                 "phase": "TEXT NOT NULL DEFAULT 'queued'",
                 "current_stage": "TEXT NOT NULL DEFAULT ''",
                 "current_case_id": "TEXT NOT NULL DEFAULT ''",
+                "voided_at": "REAL",
+                "voided_by": "TEXT REFERENCES users(id)",
+                "status_before_void": "TEXT",
             }.items():
                 if name not in columns:
                     conn.execute(f"ALTER TABLE submissions ADD COLUMN {name} {definition}")
@@ -236,8 +240,10 @@ class Database:
             # Counters and testcase results must describe the same polling snapshot.
             conn.execute("BEGIN")
             row = conn.execute(
-                """SELECT submissions.*, users.username AS owner
+                """SELECT submissions.*, users.username AS owner,
+                moderator.username AS voided_by_name
                 FROM submissions LEFT JOIN users ON users.id=submissions.owner_id
+                LEFT JOIN users moderator ON moderator.id=submissions.voided_by
                 WHERE submissions.id=? AND (? IS NULL OR owner_id=?)""",
                 (submission_id, owner_id, owner_id),
             ).fetchone()
@@ -265,20 +271,36 @@ class Database:
                     case["runs"] = json.loads(case["runs"])
             return result
 
-    def listing(self, limit=50, offset=0, owner_id=None):
+    def listing(self, limit=50, offset=0, owner_id=None, *, q="", status="", suite="", language=""):
+        conditions = ["(? IS NULL OR owner_id=?)"]
+        params = [owner_id, owner_id]
+        if q:
+            # Literal substring matching: %, _ and quotes have no special meaning.
+            fields = ("s.id", "s.name", "u.username", "repository_url", "git_ref", "commit_sha")
+            conditions.append(
+                "(" + " OR ".join(f"instr(lower({f}), lower(?))" for f in fields) + ")"
+            )
+            params.extend([q] * len(fields))
+        for column, value in (("status", status), ("stage", suite), ("language", language)):
+            if value:
+                conditions.append(f"{column}=?")
+                params.append(value)
+        where = " AND ".join(conditions)
+        source = "FROM submissions s LEFT JOIN users u ON u.id=s.owner_id"
         with self.connect() as conn:
+            conn.execute("BEGIN")
             rows = conn.execute(
-                """SELECT submissions.id, name, language, stage, stage AS suite, filter, status,
-                submissions.created_at, started_at, finished_at, total, completed, passed,
-                cycles, message, repository_url, git_ref, commit_sha, users.username AS owner
-                FROM submissions LEFT JOIN users ON users.id=submissions.owner_id
-                WHERE (? IS NULL OR owner_id=?)
-                ORDER BY submissions.created_at DESC, submissions.id DESC LIMIT ? OFFSET ?""",
-                (owner_id, owner_id, limit, offset),
+                f"""SELECT s.id, name, language, stage, stage AS suite, filter, status,
+                s.created_at, started_at, finished_at, total, completed, passed,
+                cycles, message, repository_url, git_ref, commit_sha, u.username AS owner,
+                cancel_requested, voided_at, status_before_void
+                {source} WHERE {where}
+                ORDER BY s.created_at DESC, s.id DESC LIMIT ? OFFSET ?""",
+                (*params, limit, offset),
             ).fetchall()
             total = conn.execute(
-                "SELECT count(*) FROM submissions WHERE (? IS NULL OR owner_id=?)",
-                (owner_id, owner_id),
+                f"SELECT count(*) {source} WHERE {where}",
+                params,
             ).fetchone()[0]
         return {"items": [dict(row) for row in rows], "total": total}
 
@@ -319,6 +341,19 @@ class Database:
                 status=CASE WHEN status='queued' THEN 'cancelled' ELSE status END
                 WHERE id=? AND status IN ('queued','running')""",
                 (time.time(), submission_id),
+            )
+
+    def void(self, submission_id, admin_id):
+        with self.connect() as conn:
+            # A terminal status stops workers and prevents late results from restoring a score.
+            # Keep the original verdict, diagnostics and completion time for inspection.
+            conn.execute(
+                """UPDATE submissions SET status_before_void=status, status='voided',
+                voided_at=?, voided_by=?, finished_at=COALESCE(finished_at, ?),
+                cancel_requested=CASE WHEN status IN ('queued','running') THEN 1
+                    ELSE cancel_requested END
+                WHERE id=? AND status!='voided'""",
+                (time.time(), admin_id, time.time(), submission_id),
             )
 
     def build_log(self, submission_id, worker_id, log):

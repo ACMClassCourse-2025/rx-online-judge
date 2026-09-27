@@ -1,7 +1,8 @@
 import re
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
+from .dependencies import dependency_environment
 from .ir import clang_command, strip_debug
 from .sandbox import ArtifactError, Sandbox
 
@@ -10,6 +11,7 @@ from .sandbox import ArtifactError, Sandbox
 class BuildArtifacts:
     workspace: bytes
     runtime: bytes
+    environment: dict = field(default_factory=dict)
 
 
 def semantic_verdict(code: int, should_accept: bool):
@@ -37,7 +39,7 @@ class Judge:
         self.submission, self.image = submission, image
         self.cancelled, self.deadline = cancelled, deadline
 
-    def sandbox(self, runtime=False, image=None):
+    def sandbox(self, runtime=False, image=None, environment=None):
         return Sandbox(
             self.client,
             self.settings,
@@ -45,23 +47,44 @@ class Judge:
             self.submission["id"],
             self.cancelled,
             runtime,
+            environment=environment,
         )
 
     def timeout(self, value):
         return max(0.01, min(value, self.deadline - time.monotonic()))
 
-    def build(self, source):
-        with self.sandbox() as sandbox:
+    def build(self, source, dependencies=None):
+        environment = dependency_environment(dependencies.plan.manager) if dependencies else {}
+        build_deadline = min(self.deadline, time.monotonic() + self.settings.build_timeout)
+        with self.sandbox(environment=environment) as sandbox:
             sandbox.put("/workspace", source)
+            log = dependencies.log if dependencies else ""
+            if dependencies:
+                sandbox.put("/workspace", dependencies.archive)
+                install = sandbox.execute(
+                    [
+                        "python3",
+                        "/opt/rx-oj/dependencies.py",
+                        "install",
+                        dependencies.plan.manager,
+                        dependencies.plan.directory,
+                    ],
+                    max(0.01, build_deadline - time.monotonic()),
+                )
+                log += install.log
+                if install.code or install.limit:
+                    install.log = log[-self.settings.max_log_bytes :]
+                    return install, None
             sandbox.files("/output", {"runtime.s": b""})
             execution = sandbox.execute(
                 ["python3", "/opt/rx-oj/command.py", "build"],
-                self.timeout(self.settings.build_timeout),
+                max(0.01, build_deadline - time.monotonic()),
             )
+            execution.log = (log + execution.log)[-self.settings.max_log_bytes :]
             if execution.limit or execution.code:
                 return execution, None
             runtime = sandbox.read_file("/output/runtime.s", self.settings.max_artifact_bytes)
-            return execution, BuildArtifacts(sandbox.snapshot(), runtime)
+            return execution, BuildArtifacts(sandbox.snapshot(), runtime, environment)
 
     def case(self, case, build):
         start = time.monotonic()
@@ -80,7 +103,7 @@ class Judge:
             result.update(verdict=verdict, message=message)
 
         try:
-            with self.sandbox() as sandbox:
+            with self.sandbox(environment=build.environment) as sandbox:
                 sandbox.put("/workspace", build.workspace)
                 sandbox.files("/case", {"input.rx": case.source.read_bytes()})
                 stage = "codegen" if case.stage == "optimization" else case.stage

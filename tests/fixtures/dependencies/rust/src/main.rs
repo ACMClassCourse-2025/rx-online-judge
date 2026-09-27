@@ -1,0 +1,1 @@
+fn main() { assert_eq!(itoa::Buffer::new().format(42), "42"); }
