@@ -447,13 +447,18 @@ and rankings still require an account.
 
 Submitting a compiler opens its dedicated `#run/<submission-id>` page. Run names and
 status badges in the history open the same page, and its URL can be reloaded or
-bookmarked. Ferris waits in the queue, skates through a different landscape for each
-stage, then steps off when the run ends. Progress signs and the loading bar reflect
+bookmarked. Ferris waits behind his skateboard in the queue, hops onto it when the
+worker starts, and stays aboard when the run ends. Each stage has its own landscape.
+Progress signs and the loading bar reflect
 completed tests; workers also report repository fetching, building, and the current
-testcase. Scroll to bring the stage breakdown and recent activity beside the scene,
-then continue to filter testcase results and inspect build and testcase diagnostics.
-On smaller screens, these sections stack vertically. Animation can be paused and
-respects the system’s reduced-motion preference.
+testcase. The scene fills a narrow frame around the viewport, with a large stage
+heading, a short caption, and a compact progress line. Scroll down to reveal the
+phase indicators and bring the current test and System log beside the scene, or
+scroll back up to expand the landscape again. The System log includes full compiler
+build output and expandable testcase output. On smaller screens, the log sits below
+the scene. Scenery scrolls past in continuous parallax while tests run; animation
+respects the system’s reduced-motion preference. The top-right
+Back to menu button returns to submissions.
 
 ```sh
 make lint
