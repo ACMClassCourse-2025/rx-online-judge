@@ -5,8 +5,9 @@ RUN pip install --no-cache-dir uv==0.12.13 \
 # Keep tooling and dependencies cached when application files change.
 COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev --no-install-project
+# The container runs from /app via uvicorn and python -m, so no project install is
+# needed. Installing it here would fetch Hatchling again after each source change.
 COPY rx_oj/ rx_oj/
-RUN uv sync --frozen --no-dev
 COPY languages.toml ./
 ENV PATH=/app/.venv/bin:$PATH OJ_DATA_DIR=/data OJ_TESTS_DIR=/tests PYTHONDONTWRITEBYTECODE=1
 CMD ["uvicorn", "rx_oj.api:app", "--host", "0.0.0.0", "--port", "8000"]
