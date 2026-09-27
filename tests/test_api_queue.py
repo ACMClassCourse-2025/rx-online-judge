@@ -3,6 +3,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 
+import pytest
 from fastapi.testclient import TestClient
 
 from rx_oj.api import create_app
@@ -53,10 +54,11 @@ def test_api_submission_validation_and_cancel(settings, accounts, sign_in):
         assert submit(client, filter="official:smoke").status_code == 422
         assert submit(client, stage="semantic").status_code == 422
         assert submit(client, case_ids=["one"]).status_code == 422
-        assert submit(client, name=" ").status_code == 422
-        response = submit(client)
+        assert submit(client, name="x" * 81).status_code == 422
+        response = submit(client, name="  Demo  ")
         assert response.status_code == 202
         job = response.json()
+        assert job["name"] == "Demo"
         assert job["total"] == 2 and job["status"] == "queued"
         assert job["owner"] == "alice" and job["git_ref"] == "main"
         assert "case_ids" not in job and "worker_id" not in job
@@ -64,6 +66,26 @@ def test_api_submission_validation_and_cancel(settings, accounts, sign_in):
         assert client.get("/api/submissions/nope").status_code == 404
         assert client.get("/api/submissions?limit=101").status_code == 422
         assert client.get("/api/submissions").json()["total"] == 1
+
+
+@pytest.mark.parametrize("name_fields", [{}, {"name": None}, {"name": ""}, {"name": " \t "}])
+def test_submission_without_name_gets_a_persisted_label(settings, accounts, sign_in, name_fields):
+    with TestClient(create_app(settings)) as client:
+        sign_in(client)
+        response = client.post(
+            "/api/submissions",
+            json={
+                "language": "python",
+                "repository_url": "https://github.com/course/compiler.git",
+                "suite": "semantic",
+                **name_fields,
+            },
+        )
+        assert response.status_code == 202
+        job = response.json()
+        assert job["name"] == f"Run {job['id'][:8]}"
+        assert client.get(f"/api/submissions/{job['id']}").json()["name"] == job["name"]
+        assert client.get("/api/submissions").json()["items"][0]["name"] == job["name"]
 
 
 def test_later_suites_always_include_whole_prerequisites(settings, accounts, sign_in):

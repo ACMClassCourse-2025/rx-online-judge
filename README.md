@@ -394,6 +394,8 @@ Submission JSON:
 }
 ```
 
+`name` is optional. Omit it, pass `null`, or leave it blank to generate a name such as
+`Run a1b2c3d4` from the submission ID. Custom names are trimmed and limited to 80 characters.
 `git_ref` defaults to `HEAD`; `suite` must be `semantic`, `ir`, `codegen`, or `optimization`.
 Extra fields such as `filter`, `stage`, and `case_ids` are rejected. Other users' submissions
 return 404 to students. `source_error` indicates a repository fetch/ref/source-layout problem;

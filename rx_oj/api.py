@@ -35,7 +35,7 @@ class PasswordChange(BaseModel):
 
 class Submission(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
-    name: str = Field(min_length=1, max_length=80)
+    name: str | None = Field(default=None, max_length=80)
     language: str = Field(min_length=1, max_length=40)
     repository_url: str = Field(min_length=1, max_length=500)
     git_ref: str = Field(default="HEAD", min_length=1, max_length=200)
@@ -218,7 +218,7 @@ def create_app(settings: Settings | None = None):
             app.state.db.enqueue(
                 {
                     "id": submission_id,
-                    "name": body.name,
+                    "name": body.name or f"Run {submission_id[:8]}",
                     "language": body.language,
                     "stage": body.suite,
                     "filter": "",
