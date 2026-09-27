@@ -101,15 +101,6 @@
   }
 }
 @media (max-width: 540px) {
-  .site-header:has(#manage-nav:not([hidden])) nav {
-    order: 3;
-    flex-basis: 100%;
-    margin-left: 0;
-    justify-content: space-between;
-  }
-  .site-header:has(#manage-nav:not([hidden])) .account-button {
-    margin-left: auto;
-  }
   #manage-tools > .panel-heading {
     align-items: flex-start;
   }

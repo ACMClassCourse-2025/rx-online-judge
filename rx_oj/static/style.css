@@ -719,13 +719,13 @@ details p {
   margin-top: 12px;
 }
 .compiler-help {
-  border-color: #ffffff40;
+  border-top: 1px solid #ffffff40;
   margin-top: 16px;
   padding-block: 12px 0;
   font-size: 12px;
   color: #e5e0f1;
 }
-.compiler-help summary {
+.compiler-help a {
   color: #fff;
 }
 code {
@@ -866,16 +866,10 @@ pre {
 .score-explainer > p strong {
   color: var(--green);
 }
-.score-explainer details {
-  border-top: 0;
-  padding-bottom: 0;
-  color: var(--muted);
-  max-width: 780px;
-}
-.score-explainer summary {
-  color: var(--green);
-  text-decoration: underline;
-  text-underline-offset: 4px;
+.score-explainer > a {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 14px;
 }
 .leaderboard-panel > .table-scroll > table {
   min-width: 720px;
@@ -1131,6 +1125,15 @@ dialog p {
   }
   nav {
     gap: 15px;
+  }
+  .site-header nav {
+    order: 3;
+    flex-basis: 100%;
+    margin-left: 0;
+    justify-content: space-between;
+  }
+  .site-header .account-button {
+    margin-left: auto;
   }
   .nav-link {
     font-size: 14px;

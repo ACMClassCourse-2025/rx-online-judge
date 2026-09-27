@@ -9,6 +9,7 @@ const state = {
   detailKey: "",
   leaderboardKey: "",
   page: "submissions",
+  aboutSection: "",
   runOrigin: "submissions",
   unauthorized: true,
   sessionReady: false,
@@ -78,8 +79,8 @@ function clearSession() {
   state.catalog = null;
   state.languages = [];
   $("language").innerHTML = '<option value="">Sign in to select</option>';
-  $("language-help").textContent = "";
-  $("git-hosts").textContent = "Use a public HTTPS repository.";
+  $("language-help").textContent = "Dependency preparation ↗";
+  $("language-help").href = "#about/dependencies";
   $("suite-help").textContent = "Each suite includes the stages before it.";
 }
 async function api(path, options = {}) {
@@ -112,23 +113,40 @@ async function api(path, options = {}) {
 function languageName(id) {
   return state.languages.find((l) => l.id === id)?.name || id;
 }
+function focusAboutSection() {
+  const target =
+    $("page-about").querySelector(`#about-${state.aboutSection || "title"}`) ||
+    $("about-title");
+  if (state.aboutSection)
+    target.scrollIntoView({ block: "start", behavior: "instant" });
+  else window.scrollTo({ top: 0, behavior: "instant" });
+  target.focus({ preventScroll: true });
+}
 function route() {
   const run = location.hash.match(/^#run\/([a-zA-Z0-9_-]+)$/);
+  const about = location.hash.match(/^#about(?:\/([a-z0-9-]+))?$/);
   const page = run
     ? "run"
     : location.hash === "#leaderboard"
       ? "leaderboard"
       : location.hash === "#manage"
         ? "manage"
-        : "submissions";
+        : about
+          ? "about"
+          : "submissions";
   const selected = run?.[1] || null;
-  const changed = page !== state.page || selected !== state.selected;
+  const aboutSection = about?.[1] || "";
+  const changed =
+    page !== state.page ||
+    selected !== state.selected ||
+    aboutSection !== state.aboutSection;
   if (selected !== state.selected) {
     state.selected = selected;
     state.detailKey = "";
     RunPage.reset();
   }
   state.page = page;
+  state.aboutSection = aboutSection;
   for (const section of document.querySelectorAll(".page"))
     section.hidden = section.id !== `page-${state.page}`;
   for (const link of document.querySelectorAll(".nav-link")) {
@@ -148,6 +166,7 @@ function route() {
   if (changed) {
     window.scrollTo({ top: 0, behavior: "instant" });
     if (page === "run") $("run-name").focus({ preventScroll: true });
+    if (page === "about") focusAboutSection();
   }
   if (page === "run" && state.sessionReady && !state.user)
     RunPage.error("Sign in to view this run.");
@@ -192,7 +211,7 @@ function renderLeaderboard(data) {
     .map((row) => {
       const id = escapeHTML(row.submission_id);
       const open = expanded.has(row.submission_id);
-      return `<tr class="${row.is_you ? "your-rank" : ""}"><td class="rank-number">${row.rank}</td><td><strong>${escapeHTML(row.username)}</strong>${row.is_you ? '<span class="you-label">YOU</span>' : ""}</td><td><button class="score-link" data-score="${id}" aria-expanded="${open}" aria-controls="score-${id}" title="Show testcase ratios">${scoreText(row.score)} <span>⌄</span></button></td><td>${row.can_view_submission ? `<button class="submission-link" data-id="${id}">${escapeHTML(row.submission_name)}</button>` : `<span>${escapeHTML(row.submission_name)}</span>`}</td><td>${escapeHTML(languageName(row.language))}</td><td>${date(row.finished_at)}</td></tr><tr id="score-${id}" class="score-breakdown" ${open ? "" : "hidden"}><td colspan="6"><div class="detail-body"><p class="field-help">${escapeHTML(row.username)} · Geometric mean of ${row.cases.length} testcase ratios · baseline ${escapeHTML(data.baseline.id.slice(0, 12))}</p>${scoreTable(row.cases)}</div></td></tr>`;
+      return `<tr class="${row.is_you ? "your-rank" : ""}"><td class="rank-number">${row.rank}</td><td><strong>${escapeHTML(row.username)}</strong>${row.is_you ? '<span class="you-label">YOU</span>' : ""}</td><td><button class="score-link" data-score="${id}" aria-expanded="${open}" aria-controls="score-${id}" title="Show testcase ratios">${scoreText(row.score)} <span>⌄</span></button></td><td>${row.can_view_submission ? `<button class="submission-link" data-id="${id}">${escapeHTML(row.submission_name)}</button>` : `<span>${escapeHTML(row.submission_name)}</span>`}</td><td>${escapeHTML(languageName(row.language))}</td><td>${date(row.finished_at)}</td></tr><tr id="score-${id}" class="score-breakdown" ${open ? "" : "hidden"}><td colspan="6"><div class="detail-body"><p class="field-help">${escapeHTML(row.username)} · ${row.cases.length} optimization tests · baseline ${escapeHTML(data.baseline.id.slice(0, 12))}</p>${scoreTable(row.cases)}</div></td></tr>`;
     })
     .join("");
 }
@@ -329,8 +348,6 @@ async function initialize() {
       .join("");
     renderMetrics(catalog);
     $("suite").dispatchEvent(new Event("change"));
-    $("git-hosts").textContent =
-      `Public repositories only: ${catalog.git_hosts.join(", ")}`;
     $("submission-fields").disabled = false;
     $("submit-button").innerHTML =
       'Submit compiler <span aria-hidden="true">→</span>';
@@ -398,9 +415,15 @@ $("suite").onchange = () => {
       `${suite.includes.map(label).join(" → ")} · ${number(suite.total)} tests`;
 };
 $("language").onchange = () => {
-  $("language-help").textContent =
-    state.languages.find((l) => l.id === $("language").value)?.description ||
-    "";
+  const language = state.languages.find((l) => l.id === $("language").value);
+  $("language-help").textContent = language
+    ? `${language.name} dependencies ↗`
+    : "Dependency preparation ↗";
+  $("language-help").href = ["cpp", "rust", "python", "java", "node"].includes(
+    language?.id,
+  )
+    ? `#about/${language.id}`
+    : "#about/dependencies";
 };
 $("refresh").onclick = () => {
   notice();
@@ -476,6 +499,17 @@ $("password-form").onsubmit = async (event) => {
     $("password-error").hidden = false;
   }
 };
+document.addEventListener("click", (event) => {
+  const link = event.target.closest('a[href^="#about"]');
+  if (
+    state.page === "about" &&
+    link?.getAttribute("href") === location.hash &&
+    !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey
+  ) {
+    event.preventDefault();
+    focusAboutSection();
+  }
+});
 window.addEventListener("hashchange", route);
 route();
 loadMetrics();

@@ -9,7 +9,7 @@ description = "GCC 14, CMake, Make, Python 3"
 id = "rust"
 name = "Rust"
 image = "rx-oj-rust:local"
-description = "Rust 1.95, Cargo, RV32IM target, Make, Python 3"
+description = "Rust 1.95, Cargo, Make, Python 3"
 
 [[languages]]
 id = "python"

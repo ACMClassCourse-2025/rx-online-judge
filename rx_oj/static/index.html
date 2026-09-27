@@ -23,6 +23,7 @@
     <link rel="stylesheet" href="/static/style.css" />
     <link rel="stylesheet" href="/static/run.css" />
     <link rel="stylesheet" href="/static/manage.css" />
+    <link rel="stylesheet" href="/static/about.css" />
     <script src="/static/run.js" defer></script>
     <script src="/static/manage.js" defer></script>
     <script src="/static/app.js" defer></script>
@@ -49,6 +50,7 @@
         <a href="#manage" id="manage-nav" class="nav-link" data-page="manage" hidden
           >Manage</a
         >
+        <a href="#about" class="nav-link" data-page="about">About</a>
       </nav>
       <button class="button account-button" id="access-button">Sign in</button>
     </header>
@@ -330,18 +332,9 @@
                     Each suite includes the stages before it.
                   </p>
                 </fieldset>
-                <details class="compiler-help">
-                  <summary>Compiler setup</summary>
-                  <p id="git-hosts">Use a public HTTPS repository.</p>
-                  <p id="language-help"></p>
-                  <p>
-                    Include <code>config.mk</code> at the repository root.
-                    <code>IR</code> writes LLVM <code>.ll</code>;
-                    <code>CODEGEN</code> writes RV32IM <code>.s</code>.
-                    <code>BUILD</code> can write shared assembly to
-                    <code>{runtime}</code>.
-                  </p>
-                </details>
+                <p class="compiler-help">
+                  <a id="language-help" href="#about/dependencies">Dependency preparation ↗</a>
+                </p>
                 <button class="button primary" id="submit-button" type="submit">
                   Sign in to submit <span aria-hidden="true">→</span>
                 </button>
@@ -466,11 +459,8 @@
                       <p id="run-score-description"></p>
                       <a href="#leaderboard">View leaderboard ↗</a>
                       <details id="run-score-details" hidden>
-                        <summary>Score calculation · testcase ratios</summary>
-                        <p>
-                          Sum cycles across each testcase’s inputs, divide by its
-                          Rust baseline, then take the geometric mean of the ratios.
-                        </p>
+                        <summary>Testcase ratios</summary>
+                        <p><a href="#about/scoring">How scoring works ↗</a></p>
                         <p id="run-score-baseline" class="ride-score-baseline"></p>
                         <div id="run-score-cases"></div>
                       </details>
@@ -505,21 +495,7 @@
               <strong>1.0</strong> matches Rust. <strong>Lower</strong> is
               better. Your best accepted run counts.
             </p>
-            <details>
-              <summary>How scoring works</summary>
-              <p>
-                Your score is the geometric mean of your cycles divided by the
-                Rust baseline for each optimization testcase. Cycles are summed
-                across every input of a testcase. The baseline uses the fewest
-                correct cycles from Rust optimization levels 0, 1, 2, 3, s, and
-                z.
-              </p>
-              <p>
-                All four suites must pass. Your best accepted optimization
-                submission against the current catalog counts; equal scores
-                share a rank. Expand a score to see its testcase ratios.
-              </p>
-            </details>
+            <a href="#about/scoring">How scoring works ↗</a>
           </div>
           <section class="leaderboard-panel" aria-labelledby="rankings-title">
             <div class="panel-heading">
@@ -703,6 +679,140 @@
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      </section>
+      <section id="page-about" class="page" hidden aria-labelledby="about-title">
+        <div class="about-hero">
+          <div class="wrap">
+            <span class="eyebrow">ABOUT THE JUDGE</span>
+            <h1 id="about-title" tabindex="-1">Under the hood.</h1>
+            <p>From your first build to your best score.</p>
+          </div>
+        </div>
+        <div class="wrap about-layout">
+          <aside class="about-contents" aria-labelledby="about-contents-title">
+            <h2 id="about-contents-title">On this page</h2>
+            <ol>
+              <li><a href="#about/scoring">How scoring works</a></li>
+              <li><a href="#about/dependencies">Dependency preparation</a></li>
+            </ol>
+            <a class="about-return" href="#submissions">Ready to submit? →</a>
+          </aside>
+          <div class="about-content">
+            <section class="about-section" aria-labelledby="about-scoring">
+              <span class="eyebrow">01 / THE SCORE</span>
+              <h2 id="about-scoring" class="underlined" tabindex="-1">How scoring works</h2>
+              <p>
+                Your score is the geometric mean of your cycles divided by the Rust
+                baseline for each optimization testcase, with cycles summed across all
+                inputs. The baseline uses the lowest correct total across Rust
+                optimization levels 0, 1, 2, 3, s, and z.
+                <strong>Lower is better; 1.0 matches Rust.</strong>
+                Your best fully accepted optimization run on the current test catalog
+                counts; <strong>Voided</strong> runs are excluded.
+              </p>
+            </section>
+            <section class="about-section" aria-labelledby="about-dependencies">
+              <span class="eyebrow">02 / PACKAGES &amp; TOOLCHAINS</span>
+              <h2 id="about-dependencies" class="underlined" tabindex="-1">Dependency preparation</h2>
+              <p>
+                After fetching your repository, the judge detects the selected language’s
+                dependency manifest and prepares packages before running <code>BUILD</code>.
+                <strong>Compiler builds and all tests run without network access.</strong>
+              </p>
+              <p>
+                The commands below run automatically inside the judge.
+                Downloads only allow from crates.io, PyPI, npm, or Maven Central.
+              </p>
+              <div class="about-language-links" aria-label="Language dependency guides">
+                <a href="#about/rust">Rust</a>
+                <a href="#about/python">Python</a>
+                <a href="#about/node">JavaScript</a>
+                <a href="#about/java">Java</a>
+                <a href="#about/cpp">C / C++</a>
+              </div>
+              <article class="about-language" aria-labelledby="about-rust">
+                <div class="about-language-heading">
+                  <h3 id="about-rust" tabindex="-1">Rust</h3>
+                  <span>Rust 1.95 · Cargo</span>
+                </div>
+                <p>Commit <code>Cargo.toml</code> and <code>Cargo.lock</code>.</p>
+                <h4>Fetch</h4>
+                <pre><code>cargo fetch --locked</code></pre>
+                <p>
+                  Cargo uses the prepared cache with <code>CARGO_NET_OFFLINE=true</code>
+                  during builds. Your <code>BUILD</code> command still needs to compile
+                  your project, for example with <code>cargo build --release --locked</code>.
+                </p>
+              </article>
+              <article class="about-language" aria-labelledby="about-python">
+                <div class="about-language-heading">
+                  <h3 id="about-python" tabindex="-1">Python</h3>
+                  <span>Python 3.13 · pip · venv</span>
+                </div>
+                <p>
+                  Commit <code>requirements.txt</code> with pinned versions and hashes
+                  for every direct and transitive dependency. Packages must have wheels
+                  compatible with the judge’s Python version and platform.
+                </p>
+                <h4>Fetch</h4>
+                <pre><code>python3 -m pip download \
+  --require-hashes --only-binary=:all: \
+  --dest /workspace/.rx-oj-deps/wheels \
+  -r requirements.txt</code></pre>
+                <h4>Install offline, before BUILD</h4>
+                <pre><code>python3 -m venv /workspace/.venv
+/workspace/.venv/bin/python -m pip install \
+  --no-index --find-links /workspace/.rx-oj-deps/wheels \
+  --require-hashes --only-binary=:all: \
+  -r requirements.txt</code></pre>
+                <p>Build and testcase commands automatically use this virtual environment.</p>
+              </article>
+              <article class="about-language" aria-labelledby="about-node">
+                <div class="about-language-heading">
+                  <h3 id="about-node" tabindex="-1">JavaScript</h3>
+                  <span>Node.js 22 · npm</span>
+                </div>
+                <p>Commit <code>package.json</code> and <code>package-lock.json</code>.</p>
+                <h4>Fetch</h4>
+                <pre><code>npm ci --no-audit --no-fund --ignore-scripts</code></pre>
+                <h4>Install offline, before BUILD</h4>
+                <pre><code>npm ci --no-audit --no-fund --offline</code></pre>
+              </article>
+              <article class="about-language" aria-labelledby="about-java">
+                <div class="about-language-heading">
+                  <h3 id="about-java" tabindex="-1">Java</h3>
+                  <span>OpenJDK 21 · Maven</span>
+                </div>
+                <p>Commit <code>pom.xml</code> and pin dependency and plugin versions.</p>
+                <h4>Fetch</h4>
+                <pre><code>mvn -B -ntp -s /opt/rx-oj/maven-settings.xml \
+  org.apache.maven.plugins:maven-dependency-plugin:3.8.1:go-offline</code></pre>
+                <p>
+                  Builds inherit
+                  <code>MAVEN_ARGS="-o -s /opt/rx-oj/maven-settings.xml"</code> to stay
+                  offline. Your <code>BUILD</code> command can run <code>mvn package</code>.
+                </p>
+              </article>
+              <article class="about-language" aria-labelledby="about-cpp">
+                <div class="about-language-heading">
+                  <h3 id="about-cpp" tabindex="-1">C / C++</h3>
+                </div>
+                <p>There is no automatic dependency fetch command.</p>
+              </article>
+              <h3>Projects in a subdirectory</h3>
+              <p>
+                Manifests are detected at the repository root by default. To prepare
+                dependencies elsewhere, commit <code>.rx-oj.toml</code> at the root:
+              </p>
+              <pre><code>[dependencies]
+directory = "crates/compiler"</code></pre>
+              <p>
+                Without a manifest, the judge skips preparation. For a fully vendored project, use
+                <code>enabled = false</code> in the <code>[dependencies]</code> section.
+              </p>
+            </section>
           </div>
         </div>
       </section>

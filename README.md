@@ -273,8 +273,10 @@ limits. Only emitted IR enters the Clang container. Student build scripts and Ma
 expressions execute in the language sandbox; neither repository `RUN` nor repository
 Clang commands control judging. LLVM IR compilation errors appear in case diagnostics.
 
-Implementation images support C/C++ (GCC 14), Rust 1.95 with the RV32IM target, Python 3.13
-with pip and venv, Java 21 with Maven, and Node.js 22 with npm. Build and execution
+Implementation images support C/C++ (GCC 14), Rust 1.95, Python 3.13 with pip and venv,
+Java 21 with Maven, and Node.js 22 with npm. Compiler executables run on the host
+architecture. The Rust image also includes the `riscv32im-unknown-none-elf`
+cross-compilation target for the reference runtime and test programs. Build and execution
 containers have no network access. Supported package dependencies are prepared separately
 as described below; other dependencies must be vendored or installed in operator-owned images.
 The tiny compilers in
@@ -594,8 +596,12 @@ Development uses `./data` and `./testcases`; accounts are required here too.
 For smoke fixtures, use `OJ_TESTS_DIR=tests/fixtures/suites` for both API and worker.
 The frontend has no build step or CDN dependency. Its Rust-inspired typography and
 Fellis illustration are bundled locally; see [asset sources and licenses](rx_oj/static/assets.md).
-The landing page and testcase counts are visible before sign-in; submissions, results,
-and rankings still require an account.
+The landing page, testcase counts, and **About** page are visible before sign-in;
+submissions, results, and rankings still require an account. About (`#about`) brings
+together a short scoring explanation and each language's dependency fetch and offline
+install commands. Direct links such as `#about/scoring`, `#about/dependencies`, and
+`#about/rust` open the relevant section.
+The submission form and leaderboard link to these guides.
 
 Submitting a compiler opens its dedicated `#run/<submission-id>` page. Run names and
 status badges in the history open the same page, and its URL can be reloaded or
@@ -606,8 +612,8 @@ completed tests; workers also report repository fetching, building, and the curr
 testcase. The scene fills a narrow frame around the viewport, with a large stage
 heading, a short caption, and a compact progress line. Scroll down to reveal the
 phase indicators and bring the current test and System log beside the scene, or
-scroll back up to expand the landscape again. Optimization runs show their score, the
-geometric-mean calculation, and expandable testcase cycle ratios in the results panel.
+scroll back up to expand the landscape again. Optimization runs show their score and
+expandable testcase cycle ratios, with a link to the scoring explanation on About.
 Pending runs and missing or stale baselines have explicit score states. The System log
 includes optimization cycle counts and full compiler
 build output and expandable testcase output. On smaller screens, the log sits below
