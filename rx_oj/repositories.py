@@ -70,6 +70,8 @@ def fetch_repository(client, settings, job, cancelled, deadline):
             "-c",
             "fetch.fsckObjects=true",
         ]
+        if settings.git_proxy:
+            prefix.extend(["-c", f"http.proxy={settings.git_proxy}"])
 
         def run(args, capture=0):
             if cancelled():

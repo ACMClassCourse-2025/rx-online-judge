@@ -301,7 +301,7 @@ flowchart LR
 ```
 
 Only the trusted worker has Docker access. Git fetching occurs in a separate container
-that has networking but no host mounts or credentials and never executes repository code.
+that has networking but no host mounts or repository credentials and never executes repository code.
 Compiler, Clang, and REIMU containers cannot access the network, Docker socket, database, host
 directories, or expected test outputs. Grading happens in the worker.
 
@@ -339,7 +339,8 @@ retention policy and backups for sustained use. Docker shares the host kernel; u
 worker machines and an isolation runtime such as gVisor for public, hostile submissions.
 
 Configuration: `OJ_DATA_DIR`, `OJ_TESTS_DIR`, `OJ_LANGUAGES_FILE`, `OJ_SECURE_COOKIES`,
-`OJ_GIT_HOSTS`, `OJ_GIT_IMAGE`, `OJ_IR_IMAGE`, `OJ_RUNTIME_IMAGE`, and `OJ_DOCKER_RUNTIME`.
+`OJ_GIT_HOSTS`, `OJ_GIT_PROXY`, `OJ_GIT_IMAGE`, `OJ_IR_IMAGE`, `OJ_RUNTIME_IMAGE`, and
+`OJ_DOCKER_RUNTIME`.
 `OJ_IR_IMAGE` defaults to `rx-oj-clang:local`, built by `scripts/build_images.py`.
 `OJ_DOCKER_RUNTIME=runsc` uses an already-installed gVisor runtime. Compose also supports
 `OJ_PORT`, `RX_TESTS_PATH`, `OJ_DOCKER_SOCKET`, and `OJ_DOCKER_GID`. For a custom Docker
@@ -359,6 +360,37 @@ docker compose logs --tail=50 worker
 
 Recreation is necessary to apply changed supplementary groups; restarting an existing
 container does not update them.
+
+### Git fetch proxy
+
+To fetch repositories through a proxy running on the Docker host, add this to `.env`
+(replace `7890` with your proxy's port), then run `make up`:
+
+```dotenv
+OJ_GIT_PROXY=http://host.docker.internal:7890
+```
+
+The worker passes this URL to Git's `http.proxy` setting in each Git fetch container.
+The hostname `host.docker.internal` maps to Docker's host gateway, including on Linux.
+An HTTP proxy can tunnel the HTTPS repository requests; for a SOCKS5 proxy with proxy-side
+DNS resolution, use `socks5h://host.docker.internal:7890`. A remote proxy URL also works.
+Leave `OJ_GIT_PROXY` unset or empty to connect directly. For a worker run without Compose,
+export the variable before starting it.
+
+The proxy must listen on an address reachable from Docker's bridge network. A listener
+bound only to `127.0.0.1` is not reachable through the host gateway. Enable a listener on
+the Docker bridge address in your proxy, or forward that address to its loopback port.
+For example, with `socat` installed on the Docker host:
+
+```sh
+proxy_bridge_ip="$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}')"
+socat "TCP-LISTEN:17890,bind=${proxy_bridge_ip},reuseaddr,fork" TCP:127.0.0.1:7890
+```
+
+Keep the forwarder running and set `OJ_GIT_PROXY=http://host.docker.internal:17890` in
+`.env`, then run `make up`. Host firewall rules must allow the fetch containers to reach
+that port. No Compose `ports:` entry is needed for connections from a container to the host.
+The proxy is used only for Git fetching; compiler and testcase containers remain offline.
 
 ## API
 
@@ -465,7 +497,7 @@ Back to menu button returns to submissions.
 ```sh
 make lint
 make test
-make test-docker             # Requires Python, C++, Rust, Clang, and REIMU images
+make test-docker             # Requires Git, Python, C++, Rust, Clang, and REIMU images
 OJ_TEST_DOCKER=1 OJ_TEST_GIT_NETWORK=1 uv run pytest -q
 # The opt-in network test additionally uses Git and Rust images and public GitHub access.
 ```

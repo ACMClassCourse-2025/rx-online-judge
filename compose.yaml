@@ -34,6 +34,7 @@ services:
       OJ_DOCKER_RUNTIME: ${OJ_DOCKER_RUNTIME:-}
       OJ_IR_IMAGE: ${OJ_IR_IMAGE:-rx-oj-clang:local}
       OJ_GIT_HOSTS: ${OJ_GIT_HOSTS:-github.com,gitlab.com,codeberg.org,gitee.com}
+      OJ_GIT_PROXY: ${OJ_GIT_PROXY:-}
     volumes:
       - judge-data:/data
       - ${RX_TESTS_PATH:-./testcases}:/tests:ro

@@ -2,6 +2,7 @@ import os
 import threading
 import time
 from dataclasses import replace
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import pytest
 from fastapi.testclient import TestClient
@@ -13,6 +14,7 @@ from rx_oj.catalog import Catalog, load_languages
 from rx_oj.config import ROOT
 from rx_oj.db import Database
 from rx_oj.grading import Judge
+from rx_oj.repositories import RepositoryError, fetch_repository
 from rx_oj.sandbox import Sandbox
 from rx_oj.worker import process
 
@@ -80,7 +82,7 @@ def test_full_submission_through_api_worker_and_reimu(
 
 
 def test_hardening_limits_and_exit_status(settings, client):
-    settings = replace(settings, max_log_bytes=1024)
+    settings = replace(settings, max_log_bytes=1024, git_proxy="http://host.docker.internal:7890")
     with Sandbox(client, settings, "rx-oj-python:local", "test-hardening") as box:
         result = box.execute(
             [
@@ -94,6 +96,10 @@ def test_hardening_limits_and_exit_status(settings, client):
         box.container.reload()
         config = box.container.attrs["HostConfig"]
         assert config["ReadonlyRootfs"] and config["NetworkMode"] == "none"
+        assert not config.get("ExtraHosts")
+        assert not any(
+            settings.git_proxy in value for value in box.container.attrs["Config"]["Env"]
+        )
         assert config["PidsLimit"] == 64 and config["CapDrop"] == ["ALL"]
         box.files("/workspace", {"config.mk": b"SEMANTIC = exit 1\n"})
         assert box.execute(["python3", "/opt/rx-oj/command.py", "semantic"], 5).code == 1
@@ -106,6 +112,49 @@ def test_hardening_limits_and_exit_status(settings, client):
         client, settings, "rx-oj-python:local", "test-cancel", cancelled=lambda: True
     ) as box:
         assert box.execute(["sleep", "100"], 5).limit == "cancelled"
+
+
+def test_git_fetch_uses_host_proxy(settings, client):
+    requests = []
+
+    class Proxy(BaseHTTPRequestHandler):
+        def do_CONNECT(self):
+            requests.append(self.path)
+            # Deliberately stop at the proxy: no public network or TLS certificate needed.
+            self.send_error(502, "Test proxy reached")
+
+        def log_message(self, *_):
+            pass
+
+    with HTTPServer(("0.0.0.0", 0), Proxy) as proxy:
+        thread = threading.Thread(target=proxy.serve_forever, daemon=True)
+        thread.start()
+        try:
+            settings = replace(
+                settings,
+                git_proxy=f"http://host.docker.internal:{proxy.server_port}",
+                git_hosts=("git-proxy-test.invalid",),
+                git_timeout=10,
+            )
+            with pytest.raises(RepositoryError, match="Git fetch failed"):
+                fetch_repository(
+                    client,
+                    settings,
+                    {
+                        "id": "test-git-proxy",
+                        "repository_url": "https://git-proxy-test.invalid/course/compiler.git",
+                        "git_ref": "HEAD",
+                    },
+                    lambda: False,
+                    time.monotonic() + 30,
+                )
+            assert requests == ["git-proxy-test.invalid:443"]
+            assert not client.containers.list(
+                all=True, filters={"label": "rx-oj.submission=test-git-proxy"}
+            )
+        finally:
+            proxy.shutdown()
+            thread.join(timeout=5)
 
 
 @pytest.mark.parametrize(

@@ -63,6 +63,12 @@ class Sandbox:
             read_only=True,
             network_disabled=not self.network,
             network_mode="bridge" if self.network else "none",
+            # Git fetch containers need their own mapping to a proxy on the Docker host.
+            extra_hosts=(
+                {"host.docker.internal": "host-gateway"}
+                if self.network and self.settings.git_proxy
+                else None
+            ),
             cap_drop=["ALL"],
             security_opt=["no-new-privileges:true"],
             pids_limit=64,

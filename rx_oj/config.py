@@ -17,6 +17,7 @@ class Settings:
     secure_cookies: bool = field(default_factory=lambda: os.getenv("OJ_SECURE_COOKIES") == "1")
     session_seconds: int = 12 * 60 * 60
     git_image: str = field(default_factory=lambda: os.getenv("OJ_GIT_IMAGE", "rx-oj-git:local"))
+    git_proxy: str = field(default_factory=lambda: os.getenv("OJ_GIT_PROXY", "").strip())
     git_hosts: tuple[str, ...] = field(
         default_factory=lambda: tuple(
             host.strip().lower()
