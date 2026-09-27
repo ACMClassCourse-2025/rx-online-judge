@@ -239,7 +239,9 @@ def test_accounts_share_scores_but_not_private_submission_details(scoring_setup,
         assert "private log" not in response.text and "operator only" not in response.text
         assert "repository_url" not in response.text and "owner_id" not in response.text
         assert api.get(f"/api/submissions/{alice_first}").status_code == 404
-        assert api.get(f"/api/submissions/{bob_best}").json()["optimization_score"]["score"] == 1
+        detail = api.get(f"/api/submissions/{bob_best}").json()
+        assert detail["optimization_score"]["score"] == 1
+        assert detail["optimization_baseline_status"] == "ready"
         sign_in(api, "admin")
         assert all(r["can_view_submission"] for r in api.get("/api/leaderboard").json()["items"])
         db.set_active(accounts["alice"], False)
@@ -263,7 +265,9 @@ def test_accounts_share_scores_but_not_private_submission_details(scoring_setup,
         db.activate_baseline(updated)
         data = api.get("/api/leaderboard").json()
         assert data["status"] == "stale" and data["items"] == []
-        assert api.get(f"/api/submissions/{bob_best}").json()["optimization_score"] is None
+        detail = api.get(f"/api/submissions/{bob_best}").json()
+        assert detail["optimization_score"] is None
+        assert detail["optimization_baseline_status"] == "stale"
 
 
 def test_ties_share_rank_and_keep_earliest_best_submission(scoring_setup, accounts, sign_in):
@@ -282,8 +286,14 @@ def test_ties_share_rank_and_keep_earliest_best_submission(scoring_setup, accoun
 
 
 def test_missing_baseline_returns_helpful_empty_state(scoring_setup, accounts, sign_in):
-    settings, _, _ = scoring_setup
+    settings, catalog, _ = scoring_setup
+    submission_id = store_submission(
+        Database(settings.db_path), catalog, accounts["alice"], (100, 100)
+    )
     with TestClient(create_app(settings)) as api:
         sign_in(api)
         data = api.get("/api/leaderboard").json()
         assert data["status"] == "missing" and data["items"] == [] and data["baseline"] is None
+        detail = api.get(f"/api/submissions/{submission_id}").json()
+        assert detail["optimization_score"] is None
+        assert detail["optimization_baseline_status"] == "missing"

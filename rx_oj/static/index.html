@@ -403,8 +403,8 @@
                       <button
                         id="ride-peek"
                         class="ride-peek"
-                        aria-label="Show system log"
-                        title="Show system log"
+                        aria-label="Show results and system log"
+                        title="Show results and system log"
                       >
                         ↓
                       </button>
@@ -424,25 +424,47 @@
                     </div>
                     <span id="run-status"></span>
                   </div>
-                  <div class="ride-current">
-                    <strong id="ride-current-label"></strong>
-                    <p id="ride-current-case"></p>
-                    <button
-                      id="cancel-submission"
-                      class="button ghost small"
-                      hidden
-                    >
-                      Cancel run
-                    </button>
-                  </div>
-                  <div class="ride-log-heading"><h3>System log</h3></div>
                   <div
-                    id="ride-log"
-                    class="ride-log"
+                    id="ride-live-body"
+                    class="ride-live-body"
                     tabindex="0"
                     role="region"
-                    aria-label="System log"
-                  ></div>
+                    aria-label="Run results and system log"
+                  >
+                    <div class="ride-current">
+                      <strong id="ride-current-label"></strong>
+                      <p id="ride-current-case"></p>
+                      <button
+                        id="cancel-submission"
+                        class="button ghost small"
+                        hidden
+                      >
+                        Cancel run
+                      </button>
+                    </div>
+                    <section
+                      id="run-score"
+                      class="ride-score"
+                      aria-labelledby="run-score-title"
+                      hidden
+                    >
+                      <h3 id="run-score-title">Optimization score</h3>
+                      <strong id="run-score-value" class="ride-score-value"></strong>
+                      <p id="run-score-description"></p>
+                      <a href="#leaderboard">View leaderboard ↗</a>
+                      <details id="run-score-details" hidden>
+                        <summary>Score calculation · testcase ratios</summary>
+                        <p>
+                          Sum cycles across each testcase’s inputs, divide by its
+                          Rust baseline, then take the geometric mean of the ratios.
+                        </p>
+                        <p id="run-score-baseline" class="ride-score-baseline"></p>
+                        <div id="run-score-cases"></div>
+                      </details>
+                    </section>
+                    <div class="ride-log-heading"><h3>System log</h3></div>
+                    <div id="ride-log" class="ride-log"></div>
+                  </div>
                 </aside>
               </div>
             </div>

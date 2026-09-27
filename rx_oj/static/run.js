@@ -153,10 +153,10 @@ const RunPage = (() => {
     el("ride-live").inert = !narrow.matches && amount < 0.85;
     el("ride-peek").setAttribute(
       "aria-label",
-      amount > 0.85 ? "Back to full scene" : "Show system log",
+      amount > 0.85 ? "Back to full scene" : "Show results and system log",
     );
     el("ride-peek").title =
-      amount > 0.85 ? "Back to full scene" : "Show system log";
+      amount > 0.85 ? "Back to full scene" : "Show results and system log";
     el("ride-peek").textContent = amount > 0.85 ? "↑" : "↓";
   }
   function scheduleScroll() {
@@ -179,6 +179,10 @@ const RunPage = (() => {
     el("run-content").hidden = false;
     el("cancel-submission").hidden = true;
     el("ride-log").replaceChildren();
+    el("ride-live-body").scrollTop = 0;
+    el("run-score").hidden = true;
+    el("run-score-details").open = false;
+    el("run-score-cases").replaceChildren();
     el("ride-scene").dataset.status = "queued";
     el("ride-scene").dataset.theme = "semantic";
     el("ride-scene").classList.remove("is-boarding");
@@ -243,8 +247,63 @@ const RunPage = (() => {
       return `Testing · ${names[stage]}`;
     return "Preparing your compiler";
   }
+  function renderScore(s) {
+    const panel = el("run-score");
+    panel.hidden = (s.suite || s.stage) !== "optimization";
+    if (panel.hidden) return;
+    const score = s.optimization_score;
+    panel.dataset.ready = String(Boolean(score));
+    el("run-score-details").hidden = !score;
+    el("run-score-description").hidden = Boolean(score);
+    if (score) {
+      el("run-score-value").textContent = scoreText(score.score);
+      el("run-score-description").textContent = "";
+      el("run-score-baseline").textContent =
+        `Rust baseline ${score.baseline_id.slice(0, 12)}`;
+      const table = scoreTable(score.cases);
+      if (el("run-score-cases").innerHTML !== table)
+        el("run-score-cases").innerHTML = table;
+      return;
+    }
+    el("run-score-details").open = false;
+    el("run-score-cases").replaceChildren();
+    let value = "Not scored";
+    let description =
+      "All four suites must pass to earn an optimization score.";
+    if (!terminal(s.status)) {
+      value = "Pending";
+      description = "Your score appears after all four suites pass.";
+    } else if (s.status === "accepted") {
+      if (
+        s.catalog_version &&
+        state.catalog?.version &&
+        s.catalog_version !== state.catalog.version
+      ) {
+        description =
+          "This run uses an older test catalog. Submit it again to earn a score.";
+      } else if (s.optimization_baseline_status === "missing") {
+        value = "Awaiting baseline";
+        description =
+          "The official Rust baseline is not available yet. This run will be scored automatically when it is ready.";
+      } else if (s.optimization_baseline_status === "stale") {
+        value = "Awaiting baseline";
+        description =
+          "The Rust baseline no longer matches the test catalog. Your administrator needs to regenerate it.";
+      } else {
+        description =
+          "A score requires a matching Rust baseline and complete, valid optimization results.";
+      }
+    }
+    el("run-score-value").textContent = value;
+    el("run-score-description").textContent = description;
+  }
   function update(s) {
     mountArt();
+    const revealScore =
+      Boolean(s.optimization_score) && !submission?.optimization_score;
+    const body = el("ride-live-body");
+    const scrollTop = body.scrollTop;
+    const atBottom = body.scrollHeight - body.clientHeight - scrollTop < 30;
     submission = s;
     el("run-content").hidden = false;
     el("run-error").hidden = true;
@@ -327,8 +386,9 @@ const RunPage = (() => {
       `${s.completed} of ${s.total} tests completed, ${s.passed} passed`,
     );
     el("ride-progress-fill").style.width = `${progress}%`;
-    const brief =
-      queued || s.phase === "fetching" || s.phase === "building"
+    const brief = s.optimization_score
+      ? `Optimization score ${scoreText(s.optimization_score.score)} · lower is better`
+      : queued || s.phase === "fetching" || s.phase === "building"
         ? phase
         : `${done ? (accepted ? "All tests passed" : label(s.status)) : names[stage]} · ${number(s.completed)} / ${number(s.total)} checked`;
     if (el("ride-brief").textContent !== brief)
@@ -350,6 +410,7 @@ const RunPage = (() => {
         return `<li class="${c.id === stage ? "is-current" : ""} ${complete ? "is-complete" : ""} ${c.failed ? "has-failures" : ""}" ${c.id === stage ? 'aria-current="step"' : ""}><span class="ride-stage-number">${complete ? (c.failed ? "!" : "✓") : `0${i + 1}`}</span><span>${names[c.id]}</span></li>`;
       })
       .join("");
+    renderScore(s);
     const lines = [
       ["QUEUE", `Submitted ${date(s.created_at)}`],
       ...(s.started_at
@@ -361,7 +422,7 @@ const RunPage = (() => {
       ...(s.build_log ? [["BUILD", s.build_log]] : []),
       ...s.results.map((r) => [
         r.verdict === "accepted" ? "PASS" : "FAIL",
-        `${r.case_id} · ${label(r.verdict)} · ${(r.duration_ms / 1000).toFixed(2)}s`,
+        `${r.case_id} · ${label(r.verdict)} · ${(r.duration_ms / 1000).toFixed(2)}s${r.stage === "optimization" && r.verdict === "accepted" ? ` · ${number(r.cycles)} cycles` : ""}`,
         [r.message, r.log].filter(Boolean).join("\n"),
         r.case_id,
       ]),
@@ -374,8 +435,6 @@ const RunPage = (() => {
     const expanded = new Set(
       [...log.querySelectorAll("details[open]")].map((d) => d.dataset.case),
     );
-    const scrollTop = log.scrollTop;
-    const atBottom = log.scrollHeight - log.clientHeight - log.scrollTop < 30;
     const logHTML = lines
       .map(
         ([kind, message, detail, caseId]) =>
@@ -384,16 +443,25 @@ const RunPage = (() => {
       .join("");
     if (log.innerHTML !== logHTML) {
       log.innerHTML = logHTML;
-      log.scrollTop = atBottom ? log.scrollHeight : scrollTop;
+      body.scrollTop = atBottom ? body.scrollHeight : scrollTop;
       if (s.status === "build_error" && previousStatus !== "build_error") {
         const build = log
           .querySelector(".log-build")
           ?.closest(".ride-log-line");
         if (build)
-          log.scrollTop +=
-            build.getBoundingClientRect().top - log.getBoundingClientRect().top;
+          body.scrollTop +=
+            build.getBoundingClientRect().top -
+            body.getBoundingClientRect().top;
       }
     }
+    if (
+      revealScore ||
+      (done && !previousStatus && s.status !== "build_error") ||
+      (accepted &&
+        (s.suite || s.stage) === "optimization" &&
+        previousStatus !== "accepted")
+    )
+      body.scrollTop = 0;
     // Board once when the worker picks up the run; polling and completion never replay it.
     if (
       s.status === "running" &&

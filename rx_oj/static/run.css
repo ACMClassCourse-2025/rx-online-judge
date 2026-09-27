@@ -504,6 +504,76 @@
 #run-status .badge {
   font-size: 10px;
 }
+.ride-live-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+.ride-score {
+  margin: 0 18px 18px;
+  padding: 16px;
+  border: 1px solid var(--run-line);
+  border-left: 3px solid var(--run-accent);
+  border-radius: 3px;
+  background: #edf3e8;
+}
+.ride-score h3 {
+  font-size: 13px;
+  font-weight: 600;
+}
+.ride-score-value {
+  display: block;
+  margin-top: 8px;
+  color: var(--run-accent);
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+.ride-score[data-ready="true"] .ride-score-value {
+  font: 600 32px/1.3 var(--mono);
+}
+.ride-score p {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.ride-score a,
+.ride-score summary {
+  color: var(--run-accent);
+  font-size: 12px;
+}
+.ride-score a {
+  display: inline-block;
+  margin-top: 12px;
+}
+.ride-score details {
+  margin-top: 14px;
+}
+.ride-score summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.ride-score .ride-score-baseline {
+  font: 10px/1.6 var(--mono);
+  overflow-wrap: anywhere;
+}
+.ride-score .table-scroll {
+  max-height: 260px;
+  margin-top: 12px;
+}
+.ride-score th,
+.ride-score td {
+  padding: 8px;
+  font-size: 10px;
+}
+.ride-score th {
+  letter-spacing: 0;
+}
+.ride-score .case-name {
+  min-width: 120px;
+}
 .ride-current {
   padding: 0 22px 20px;
   min-width: 0;
@@ -537,12 +607,7 @@
   font-size: 13px;
 }
 .ride-log {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  overscroll-behavior: contain;
   padding: 0 22px 18px;
-  scrollbar-width: thin;
 }
 .ride-log-line {
   display: grid;

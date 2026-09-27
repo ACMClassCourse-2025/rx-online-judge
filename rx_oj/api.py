@@ -18,7 +18,7 @@ from .config import Settings
 from .db import Database, QueueFull
 from .http_limits import RequestBoundary
 from .repositories import RepositoryError, validate_repository
-from .scoring import leaderboard, score_submission
+from .scoring import baseline_status, leaderboard, score_submission
 
 
 class Login(BaseModel):
@@ -192,9 +192,9 @@ def create_app(settings: Settings | None = None):
         result = app.state.db.get(submission_id, owner_id=visibility(user))
         if result is None:
             raise HTTPException(404, "Submission not found")
-        result["optimization_score"] = score_submission(
-            result, app.state.db.baseline(), app.state.catalog
-        )
+        baseline = app.state.db.baseline()
+        result["optimization_score"] = score_submission(result, baseline, app.state.catalog)
+        result["optimization_baseline_status"] = baseline_status(baseline, app.state.catalog)
         return result
 
     @app.post("/api/submissions/{submission_id}/cancel")

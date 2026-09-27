@@ -452,7 +452,9 @@ The leaderboard reports `status: ready`, `missing`, or `stale`. Scores are calcu
 the active baseline at read time. Each ranked entry includes `rank`, `username`, `score`,
 `submission_id`, `language`, `finished_at`, and per-testcase `cycles`, `baseline_cycles`,
 and `ratio`. `optimization_score` in submission details is `null` when the submission or
-baseline is ineligible. Leaderboard visibility does not grant access to another account's
+baseline is ineligible. `optimization_baseline_status` reports `ready`, `missing`, or `stale`
+so the run page can explain why a score is unavailable.
+Leaderboard visibility does not grant access to another account's
 submission details or cancellation endpoint.
 
 ## Upgrade for IR and runtime support
@@ -502,7 +504,10 @@ completed tests; workers also report repository fetching, building, and the curr
 testcase. The scene fills a narrow frame around the viewport, with a large stage
 heading, a short caption, and a compact progress line. Scroll down to reveal the
 phase indicators and bring the current test and System log beside the scene, or
-scroll back up to expand the landscape again. The System log includes full compiler
+scroll back up to expand the landscape again. Optimization runs show their score, the
+geometric-mean calculation, and expandable testcase cycle ratios in the results panel.
+Pending runs and missing or stale baselines have explicit score states. The System log
+includes optimization cycle counts and full compiler
 build output and expandable testcase output. On smaller screens, the log sits below
 the scene. Scenery scrolls past in continuous parallax while tests run; animation
 respects the system’s reduced-motion preference. The top-right
