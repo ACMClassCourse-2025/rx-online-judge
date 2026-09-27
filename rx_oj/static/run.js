@@ -47,6 +47,7 @@ const RunPage = (() => {
   let resultLimit = 50;
   let reportKey = "";
   let previousStatus = "";
+  const revealDistance = 520;
 
   function mountArt() {
     if (mounted) return;
@@ -82,7 +83,7 @@ const RunPage = (() => {
       </g>
       <g transform="translate(270,264)"><ellipse cx="135" cy="175" rx="136" ry="8" fill="#383d33" opacity=".12"/>
         <g class="ride-board"><path d="M37 151q13 15 30 15h146q22 0 31-15" stroke="#303439" stroke-width="8" stroke-linecap="round" fill="none"/><path d="M51 154h179" stroke="#e9b950" stroke-width="5" stroke-linecap="round"/><path d="M85 166v7m114-7v7" stroke="#545967" stroke-width="5"/><g class="ride-wheel"><circle cx="85" cy="177" r="10" fill="#efad51"/><circle cx="85" cy="177" r="4" fill="#404449"/></g><g class="ride-wheel"><circle cx="199" cy="177" r="10" fill="#efad51"/><circle cx="199" cy="177" r="4" fill="#404449"/></g></g>
-        <g class="ride-crab-position"><g class="ride-crab-bob"><g fill="none" stroke="#c44f17" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="m67 112-24 19 7 16m13-26-12 17 9 9m-3-26-20 15 4 13m167-37 25 19-7 16m-12-26 12 17-9 9m3-26 20 15-4 13"/></g><g id="ride-crab" transform="translate(4,-16) scale(.22)"></g></g></g>
+        <g class="ride-crab-position"><g class="ride-crab-bob"><g id="ride-crab" transform="translate(4,-16) scale(.22)"></g></g></g>
         <g class="ride-speed" stroke="var(--road-edge)" stroke-width="3" stroke-linecap="round"><path d="M-15 103h-35m23 15h-48m47 16h-25"/></g>
       </g>
       <g fill="var(--road-edge)" opacity=".35"><path d="m121 509 6-10 4 10m4 0 7-7 1 7m852 3 4-10 6 10m-824-6h16m876 2h24"/></g>
@@ -140,7 +141,7 @@ const RunPage = (() => {
     const top = el("ride-runway").getBoundingClientRect().top;
     const amount = narrow.matches
       ? 1
-      : Math.min(1, Math.max(0, (16 - top) / 480));
+      : Math.min(1, Math.max(0, (16 - top) / revealDistance));
     el("ride-sticky").style.setProperty("--reveal", amount.toFixed(4));
     el("ride-sticky").classList.toggle("is-detailed", amount > 0.85);
     el("ride-live").inert = amount < 0.85;
@@ -155,6 +156,7 @@ const RunPage = (() => {
     scheduleScroll();
   }
   function reset() {
+    mountArt();
     submission = null;
     reportKey = "";
     resultLimit = 50;
@@ -163,7 +165,8 @@ const RunPage = (() => {
     el("run-meta").textContent = "";
     el("run-status").textContent = "";
     el("run-error").hidden = true;
-    el("run-content").hidden = true;
+    el("run-content").hidden = false;
+    el("run-report").hidden = true;
     el("cancel-submission").hidden = true;
     el("detail").replaceChildren();
     el("ride-log").replaceChildren();
@@ -219,6 +222,7 @@ const RunPage = (() => {
     mountArt();
     submission = s;
     el("run-content").hidden = false;
+    el("run-report").hidden = false;
     el("run-error").hidden = true;
     const counts = stageData(s);
     const stage = currentStage(s, counts);
@@ -251,7 +255,7 @@ const RunPage = (() => {
     el("ride-scene").setAttribute(
       "aria-label",
       queued
-        ? "Ferris resting with one side of his feet on a skateboard, waiting for a worker."
+        ? "Ferris resting on a skateboard, waiting for a worker."
         : done
           ? `Ferris has stepped off his skateboard, ${accepted ? "claws resting happily" : "waving his claws encouragingly"}. ${label(s.status)}.`
           : `Ferris riding a skateboard through ${theme[0].toLowerCase()}. ${s.completed} of ${s.total} tests completed.`,
@@ -516,11 +520,11 @@ const RunPage = (() => {
       });
     else
       window.scrollTo({
-        top:
-          window.scrollY +
-          el("ride-runway").getBoundingClientRect().top +
-          480 -
-          16,
+          top:
+            window.scrollY +
+            el("ride-runway").getBoundingClientRect().top +
+            520 -
+            16,
         behavior: motion.matches ? "instant" : "smooth",
       });
   };

@@ -347,35 +347,37 @@
         </div>
       </section>
       <section id="page-run" class="page run-page" hidden aria-labelledby="run-name">
-        <div class="run-topbar wrap">
-          <a href="#submissions" class="run-back">← All runs</a>
-          <div class="run-identity">
-            <h1 id="run-name" tabindex="-1">Loading your run…</h1>
-            <span id="run-meta"></span>
-          </div>
-          <span id="run-status"></span>
-          <button id="cancel-submission" class="button ghost small" hidden>
-            Cancel run
-          </button>
-        </div>
         <p id="run-error" class="notice wrap" role="status" hidden></p>
         <div id="run-content" hidden>
           <div class="ride-runway wrap" id="ride-runway">
             <div class="ride-sticky" id="ride-sticky">
               <div class="ride-toolbar">
-                <ol
-                  id="ride-stages"
-                  class="ride-stages"
-                  aria-label="Test stages"
-                ></ol>
-                <button
-                  id="ride-motion"
-                  class="ride-motion"
-                  aria-pressed="false"
-                  aria-label="Pause animation"
-                >
-                  Ⅱ <span>Pause</span>
-                </button>
+                <div class="run-context">
+                  <a href="#submissions" class="run-back">← All runs</a>
+                  <div class="run-identity">
+                    <h1 id="run-name" tabindex="-1">Loading your run…</h1>
+                    <span id="run-meta"></span>
+                  </div>
+                  <span id="run-status"></span>
+                  <button id="cancel-submission" class="button ghost small" hidden>
+                    Cancel run
+                  </button>
+                </div>
+                <div class="ride-toolbar-tools">
+                  <ol
+                    id="ride-stages"
+                    class="ride-stages"
+                    aria-label="Test stages"
+                  ></ol>
+                  <button
+                    id="ride-motion"
+                    class="ride-motion"
+                    aria-pressed="false"
+                    aria-label="Pause animation"
+                  >
+                    Ⅱ <span>Pause</span>
+                  </button>
+                </div>
               </div>
               <div class="ride-grid">
                 <div class="ride-main">
@@ -384,7 +386,7 @@
                     class="ride-scene"
                     data-theme="semantic"
                     data-status="queued"
-                    aria-label="Ferris resting with one side of his feet on a skateboard, waiting for a worker."
+                    aria-label="Ferris resting on a skateboard, waiting for a worker."
                   >
                     <div class="ride-copy">
                       <span id="ride-location" class="ride-location"
