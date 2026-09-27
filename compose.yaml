@@ -61,7 +61,7 @@ services:
       - --output
       - /data/optimization-baseline.json
     volumes:
-      - ${RX_REFERENCE_PATH:-../rx-compiler}:/reference:ro
+      - ${RX_REFERENCE_PATH:-./vendor/rx-compiler}:/reference:ro
     restart: "no"
 
 volumes:

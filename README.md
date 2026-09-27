@@ -1,6 +1,6 @@
 # Rx Online Judge
 
-A compiler-course judge for the sibling [`rx-compiler`](../rx-compiler/README-EN.md)
+A compiler-course judge for the [`rx-compiler`](vendor/rx-compiler/README-EN.md)
 project. Students sign in with administrator-provisioned accounts and submit a **public
 Git repository**, its branch/tag/commit, an implementation language, and a whole test
 suite. The judge fetches the source, builds the compiler, and runs Rx tests in containers.
@@ -88,11 +88,11 @@ docker compose run --rm --no-deps baseline
 
 This uses the official Rust toolchain in the configured `rust` language image, testcases
 from this repository's `testcases/official` submodule, the reference helpers and `config.mk`
-from `../rx-compiler`, and the judge's trusted REIMU image. Set `RX_REFERENCE_PATH` for a
-different reference checkout. Compilation and execution use the same offline containers,
-limits, inputs, and correctness checks as
-submissions. The baseline job measures optimization tests only; student submissions
-still run the complete cumulative suite.
+from the pinned `vendor/rx-compiler` submodule, and the judge's trusted REIMU image.
+Set `RX_REFERENCE_PATH` for a different reference checkout. Compilation and execution
+use the same offline containers, limits, inputs, and correctness checks as submissions.
+The baseline job measures optimization tests only; student submissions still run the
+complete cumulative suite.
 
 Publication is atomic: every optimization testcase must have a valid baseline before it
 replaces the active one. Failed or interrupted generation leaves the previous baseline
@@ -113,36 +113,41 @@ submissions record the catalog version but do not record the runtime image they 
 For local development using `./data`:
 
 ```sh
-uv run python -m rx_oj.baseline --reference-dir ../rx-compiler \
+uv run python -m rx_oj.baseline --reference-dir vendor/rx-compiler \
   --output data/optimization-baseline.json
 ```
 
 ## Start the judge
 
-Requirements: Linux Docker with cgroup limits, Docker Compose, Python 3 for setup scripts,
-and sibling checkouts:
+Requirements: Linux Docker with cgroup limits, Docker Compose, and Python 3 for setup
+scripts. This repository pins `rx-compiler` at `vendor/rx-compiler` for reference
+helpers and optimization baseline generation. Its nested `vendor/REIMU` submodule
+supplies the simulator for the judge's runtime image. No sibling checkout is needed:
 
 ```text
-Compiler/
-├── rx-compiler/        # Reference compiler helpers and vendor/REIMU
-└── rx-online-judge/
-    └── testcases/
-        └── official/   # This judge's pinned testcase submodule
+rx-online-judge/
+├── testcases/
+│   └── official/          # This judge's pinned testcase submodule
+└── vendor/
+    └── rx-compiler/       # Pinned reference compiler submodule
+        └── vendor/
+            └── REIMU/     # Simulator pinned by rx-compiler
 ```
 
 From `rx-online-judge`:
 
 ```sh
 make init
-git -C ../rx-compiler submodule update --init --recursive vendor/REIMU
 python3 scripts/build_images.py
 docker compose up --build -d
 ```
 
 The dashboard is at **http://localhost:8000**. The API binds to loopback by default.
 Create accounts before signing in; there is no default password or web registration.
-`make init` also migrates the previous generated `RX_TESTS_PATH` setting to `./testcases`
-in an existing `.env`, while preserving other settings and custom testcase paths.
+`make init` initializes the testcase and reference compiler submodules recursively,
+including REIMU. It also migrates the previous generated `RX_TESTS_PATH` setting to
+`./testcases` in an existing `.env`, while preserving other settings and custom
+testcase paths.
 
 ## Accounts and administration
 
@@ -442,7 +447,7 @@ geometric-mean scoring, baseline selection, ranking ties, score visibility, and 
 execution, separate IR lowering, and immutable shared runtime artifacts. The opt-in
 network test submits the public Rx reference repository through login, Git fetch, build,
 and semantic checking. Container tests exercise all four cumulative stages using the
-examples and check the sibling Rust reference through both IR and codegen.
+examples and check the pinned Rust reference submodule through both IR and codegen.
 
 Add language images and their IDs to `languages.toml` to extend toolchain support.
 Images need `/bin/sh`, `sleep`, `tar`, Python 3, GNU Make, the language toolchain, and

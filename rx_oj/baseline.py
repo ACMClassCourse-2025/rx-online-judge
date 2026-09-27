@@ -143,7 +143,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Generate and activate an official Rust optimization baseline"
     )
-    parser.add_argument("--reference-dir", type=Path, default=ROOT.parent / "rx-compiler")
+    parser.add_argument("--reference-dir", type=Path, default=ROOT / "vendor/rx-compiler")
     parser.add_argument(
         "--output", type=Path, help="Also save all measurements and diagnostics as JSON"
     )

@@ -14,6 +14,11 @@ parser.add_argument(
     choices=["cpp", "rust", "python", "java", "node"],
 )
 args = parser.parse_args()
+if not (root / "vendor/rx-compiler/vendor/REIMU/src/main.cpp").exists():
+    parser.error(
+        "Initialize rx-compiler and REIMU first: "
+        "git submodule update --init --recursive vendor/rx-compiler"
+    )
 subprocess.run(
     ["docker", "build", "-f", "docker/clang.Dockerfile", "-t", "rx-oj-clang:local", "."],
     cwd=root,
@@ -24,8 +29,6 @@ subprocess.run(
     cwd=root,
     check=True,
 )
-if not (root.parent / "rx-compiler/vendor/REIMU/src/main.cpp").exists():
-    parser.error("Initialize rx-compiler's REIMU submodule first (see README.md)")
 for language in args.languages:
     subprocess.run(
         [
@@ -47,11 +50,11 @@ subprocess.run(
         "docker",
         "build",
         "-f",
-        "rx-online-judge/docker/reimu.Dockerfile",
+        "docker/reimu.Dockerfile",
         "-t",
         "rx-oj-reimu:local",
         ".",
     ],
-    cwd=root.parent,
+    cwd=root,
     check=True,
 )

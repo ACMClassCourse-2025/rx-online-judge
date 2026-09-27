@@ -240,9 +240,9 @@ def test_runtime_is_frozen_at_build_and_shared_by_ir_and_codegen(settings, clien
 def test_rust_reference_ir_and_codegen_with_empty_runtime(settings, client):
     from rx_oj.baseline import reference_files
 
-    reference = ROOT.parent / "rx-compiler"
+    reference = ROOT / "vendor/rx-compiler"
     if not (reference / "config.mk").is_file():
-        pytest.skip("Requires the sibling reference compiler checkout")
+        pytest.skip("Initialize rx-compiler with git submodule update --init --recursive")
     files = reference_files(reference)
     if b"IR =" not in files["config.mk"]:
         pytest.skip("Reference compiler checkout must support the IR command")

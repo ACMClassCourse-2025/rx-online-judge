@@ -29,6 +29,7 @@ markers = ["docker: integration tests requiring locally built judge images"]
 
 [tool.ruff]
 line-length = 100
+extend-exclude = ["vendor"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]

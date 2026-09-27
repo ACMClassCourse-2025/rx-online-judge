@@ -1,3 +1,6 @@
 [submodule "testcases/official"]
 	path = testcases/official
 	url = https://github.com/ACMClassCourse-2025/rx-compiler-testcases.git
+[submodule "vendor/rx-compiler"]
+	path = vendor/rx-compiler
+	url = https://github.com/ACMClassCourse-2025/rx-compiler.git
