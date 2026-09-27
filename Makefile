@@ -1,13 +1,16 @@
-.PHONY: init images up down dev worker baseline test test-docker lint
+.PHONY: init setup images up down dev worker baseline test test-docker lint
 
 init:
 	git submodule update --init --recursive
 	python3 scripts/setup.py
 
+setup:
+	python3 scripts/setup.py --require-docker
+
 images:
 	python3 scripts/build_images.py
 
-up:
+up: setup
 	docker compose up --build -d
 
 down:
@@ -19,7 +22,7 @@ dev:
 worker:
 	uv run python -m rx_oj.worker
 
-baseline:
+baseline: setup
 	docker compose run --rm --no-deps baseline
 
 test:

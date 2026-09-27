@@ -83,6 +83,7 @@ After building images and starting the judge, generate the baseline:
 ```sh
 make baseline
 # Equivalent:
+make setup
 docker compose run --rm --no-deps baseline
 ```
 
@@ -139,7 +140,7 @@ From `rx-online-judge`:
 ```sh
 make init
 python3 scripts/build_images.py
-docker compose up --build -d
+make up
 ```
 
 The dashboard is at **http://localhost:8000**. The API binds to loopback by default.
@@ -148,6 +149,12 @@ Create accounts before signing in; there is no default password or web registrat
 including REIMU. It also migrates the previous generated `RX_TESTS_PATH` setting to
 `./testcases` in an existing `.env`, while preserving other settings and custom
 testcase paths.
+
+`make up` and `make baseline` refresh `OJ_DOCKER_GID` from the configured Docker socket
+before starting containers, including when `.env` already exists or was copied from another
+machine. The worker runs as a non-root user and needs this supplementary group to access
+Docker. Run `make setup` to refresh these settings separately; it reports an error if the
+socket is missing or is not a Unix socket. Other settings in `.env` are preserved.
 
 ## Accounts and administration
 
@@ -335,8 +342,23 @@ Configuration: `OJ_DATA_DIR`, `OJ_TESTS_DIR`, `OJ_LANGUAGES_FILE`, `OJ_SECURE_CO
 `OJ_GIT_HOSTS`, `OJ_GIT_IMAGE`, `OJ_IR_IMAGE`, `OJ_RUNTIME_IMAGE`, and `OJ_DOCKER_RUNTIME`.
 `OJ_IR_IMAGE` defaults to `rx-oj-clang:local`, built by `scripts/build_images.py`.
 `OJ_DOCKER_RUNTIME=runsc` uses an already-installed gVisor runtime. Compose also supports
-`OJ_PORT`, `RX_TESTS_PATH`, `OJ_DOCKER_SOCKET`, and `OJ_DOCKER_GID`. For rootless Docker,
-set `OJ_DOCKER_SOCKET` before running setup.
+`OJ_PORT`, `RX_TESTS_PATH`, `OJ_DOCKER_SOCKET`, and `OJ_DOCKER_GID`. For a custom Docker
+socket, set `OJ_DOCKER_SOCKET` in `.env` or export it before running `make setup` or
+`make up`; an exported value takes precedence. Setup replaces a saved `OJ_DOCKER_GID`
+with the socket's current group ID. Export `OJ_DOCKER_GID` only if you intentionally need
+to override that detection.
+
+If the worker fails at `docker.from_env()` with `PermissionError(13, 'Permission denied')`,
+refresh the socket group and recreate the worker:
+
+```sh
+make setup
+docker compose up -d --no-deps --force-recreate worker
+docker compose logs --tail=50 worker
+```
+
+Recreation is necessary to apply changed supplementary groups; restarting an existing
+container does not update them.
 
 ## API
 

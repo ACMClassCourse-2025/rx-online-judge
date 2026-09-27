@@ -28,7 +28,7 @@ services:
     pull_policy: never
     user: "1000:1000"
     group_add:
-      - "${OJ_DOCKER_GID:-0}"
+      - "${OJ_DOCKER_GID:?Run make setup to detect the Docker socket group}"
     command: ["python", "-m", "rx_oj.worker"]
     environment:
       OJ_DOCKER_RUNTIME: ${OJ_DOCKER_RUNTIME:-}
