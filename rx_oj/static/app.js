@@ -173,7 +173,7 @@ function route() {
   refresh();
 }
 function scoreTable(cases) {
-  return `<div class="table-scroll" tabindex="0" role="region" aria-label="Optimization score breakdown"><table><thead><tr><th>TESTCASE</th><th>YOUR CYCLES</th><th>BASELINE CYCLES</th><th>RATIO ↓</th></tr></thead><tbody>${cases.map((c) => `<tr><td class="case-name">${escapeHTML(c.case_id)}</td><td>${number(c.cycles)}</td><td>${number(c.baseline_cycles)}</td><td>${scoreText(c.ratio)}</td></tr>`).join("")}</tbody></table></div>`;
+  return `<div class="table-scroll" tabindex="0" role="region" aria-label="Optimization score breakdown"><table><thead><tr><th>TESTCASE</th><th>YOUR CYCLES</th><th>BASELINE CYCLES</th><th>RATIO</th></tr></thead><tbody>${cases.map((c) => `<tr><td class="case-name">${escapeHTML(c.case_id)}</td><td>${number(c.cycles)}</td><td>${number(c.baseline_cycles)}</td><td>${scoreText(c.ratio)}</td></tr>`).join("")}</tbody></table></div>`;
 }
 function renderLeaderboard(data) {
   const key = JSON.stringify(data);

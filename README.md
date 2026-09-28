@@ -54,7 +54,7 @@ contents change the catalog fingerprint, so submissions must run again against t
 
 The **Leaderboard** page ranks active accounts by their best fully accepted optimization
 submission against the current test catalog. Every semantic, IR, and codegen testcase must pass
-too. Optimization cases use `CODEGEN`, so the scored assembly is produced by the submission. Each account has one entry; lower scores rank higher, and equal scores share a rank.
+too. Optimization cases use `CODEGEN`, so the scored assembly is produced by the submission. Each account has one entry; higher scores rank higher, and equal scores share a rank.
 For equally scoring submissions from one account, the earliest completed one is shown.
 All signed-in accounts can see the rankings and expand scores to inspect testcase ratios.
 Submission diagnostics remain accessible only to the owner and administrators.
@@ -69,14 +69,16 @@ The best flag may differ between testcases; inputs within a testcase use one var
 
 ```text
 baseline_i = min(total cycles of each correct Rust variant for testcase i)
-ratio_i    = submission_cycles_i / baseline_i
+ratio_i    = baseline_i / submission_cycles_i
 score      = exp(sum(log(ratio_i)) / number_of_optimization_testcases)
 ```
 
 Each testcase has equal weight in the geometric mean. `1.0` matches the baseline;
-`0.8` means a geometric mean cycle ratio of 80%; `1.2` means 120%. There is no cap or
-inversion. Failed, incomplete, cancelled, older-catalog, and ownerless legacy submissions
+`2.0` means a geometric mean baseline-to-submission cycle ratio of 2 (half the cycles
+if every testcase has that ratio); `0.5` means twice the cycles in that same case.
+Scores have no cap. Failed, incomplete, cancelled, voided, older-catalog, and ownerless legacy submissions
 do not rank. Accepted submission details also show the score and testcase breakdown.
+Existing results use this formula immediately; no rejudge or baseline regeneration is needed.
 
 After building images and starting the judge, generate the baseline:
 
@@ -552,7 +554,8 @@ preserves the first audit record. Workers cannot overwrite a voided run. Databas
 are added automatically at startup, preserving existing history. Owners can still inspect
 their voided runs, but only administrators can search all accounts or void a run.
 
-The leaderboard reports `status: ready`, `missing`, or `stale`. Scores are calculated from
+The leaderboard reports `status: ready`, `missing`, or `stale`, and `lower_is_better: false`.
+Scores are calculated from
 the active baseline at read time. Each ranked entry includes `rank`, `username`, `score`,
 `submission_id`, `language`, `finished_at`, and per-testcase `cycles`, `baseline_cycles`,
 and `ratio`. `optimization_score` in submission details is `null` when the submission or
@@ -601,7 +604,7 @@ submissions, results, and rankings still require an account. About (`#about`) br
 together a short scoring explanation and each language's dependency fetch and offline
 install commands. Direct links such as `#about/scoring`, `#about/dependencies`, and
 `#about/rust` open the relevant section.
-The submission form and leaderboard link to these guides.
+The submission form links to the selected language's dependency guide.
 
 Submitting a compiler opens its dedicated `#run/<submission-id>` page. Run names and
 status badges in the history open the same page, and its URL can be reloaded or
@@ -613,7 +616,7 @@ testcase. The scene fills a narrow frame around the viewport, with a large stage
 heading, a short caption, and a compact progress line. Scroll down to reveal the
 phase indicators and bring the current test and System log beside the scene, or
 scroll back up to expand the landscape again. Optimization runs show their score and
-expandable testcase cycle ratios, with a link to the scoring explanation on About.
+expandable testcase cycle ratios. The scoring explanation is available on About.
 Pending runs and missing or stale baselines have explicit score states. The System log
 includes optimization cycle counts and full compiler
 build output and expandable testcase output. On smaller screens, the log sits below

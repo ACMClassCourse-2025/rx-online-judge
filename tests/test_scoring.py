@@ -98,13 +98,27 @@ def store_submission(db, catalog, owner, cycles, status="accepted", version=None
 def test_geometric_mean_weights_testcases_equally(scoring_setup):
     _, catalog, baseline = scoring_setup
     score = score_submission(submission(catalog), baseline, catalog)
-    # 0.25 and 4.0 produce 1.0; arithmetic mean and ratio of totals would both be 2.125.
+    # 4.0 and 0.25 produce 1.0; neither an arithmetic mean nor a ratio of totals does.
     assert score["score"] == pytest.approx(1.0)
-    assert [case["ratio"] for case in score["cases"]] == [0.25, 4.0]
+    assert [case["ratio"] for case in score["cases"]] == [4.0, 0.25]
     assert score_submission(submission(catalog, (100, 100)), baseline, catalog)["score"] == 1
     assert score_submission(submission(catalog, (1, 10**18)), baseline, catalog)[
         "score"
-    ] == pytest.approx(10**7)
+    ] == pytest.approx(10**-7)
+
+
+@pytest.mark.parametrize(
+    "cycles,ratios,expected", [((30, 150), [4, 2], 8**0.5), ((240, 600), [0.5, 0.5], 0.5)]
+)
+def test_scores_compare_each_baseline_to_submission_cycles(scoring_setup, cycles, ratios, expected):
+    _, catalog, baseline = scoring_setup
+    for case, value in zip(baseline["cases"], (120, 300), strict=True):
+        case["cycles"] = value
+    score = score_submission(submission(catalog, cycles), baseline, catalog)
+    assert [case["ratio"] for case in score["cases"]] == ratios
+    assert [case["cycles"] for case in score["cases"]] == list(cycles)
+    assert [case["baseline_cycles"] for case in score["cases"]] == [120, 300]
+    assert score["score"] == pytest.approx(expected)
 
 
 @pytest.mark.parametrize(
@@ -214,7 +228,8 @@ def test_accounts_share_scores_but_not_private_submission_details(scoring_setup,
     settings, catalog, baseline = scoring_setup
     db = Database(settings.db_path)
     db.activate_baseline(baseline)
-    alice_first = store_submission(db, catalog, accounts["alice"], (25, 100))  # 0.5
+    store_submission(db, catalog, accounts["alice"], (200, 200))  # Earlier but worse.
+    alice_first = store_submission(db, catalog, accounts["alice"], (25, 100))  # 2.0
     store_submission(db, catalog, accounts["alice"], (400, 400))  # Later but worse.
     bob_best = store_submission(db, catalog, accounts["bob"], (100, 100))
     store_submission(db, catalog, accounts["bob"], (1, 1), status="failed")
@@ -226,11 +241,12 @@ def test_accounts_share_scores_but_not_private_submission_details(scoring_setup,
         response = api.get("/api/leaderboard")
         assert response.status_code == 200
         data = response.json()
-        assert data["status"] == "ready" and data["lower_is_better"]
+        assert data["status"] == "ready" and data["lower_is_better"] is False
+        assert data["formula"] == "exp(mean(log(baseline_cycles / testcase_cycles)))"
         assert "no-store" in response.headers["cache-control"]
         rows = data["items"]
         assert [(r["username"], r["rank"], r["score"]) for r in rows] == [
-            ("alice", 1, 0.5),
+            ("alice", 1, 2),
             ("bob", 2, 1),
         ]
         assert rows[0]["submission_id"] == alice_first
@@ -253,8 +269,8 @@ def test_accounts_share_scores_but_not_private_submission_details(scoring_setup,
         for case in updated["cases"]:
             case["cycles"] *= 2
         db.activate_baseline(updated)
-        assert api.get("/api/leaderboard").json()["items"][0]["score"] == 0.5
-        assert api.get(f"/api/submissions/{bob_best}").json()["optimization_score"]["score"] == 0.5
+        assert api.get("/api/leaderboard").json()["items"][0]["score"] == 2
+        assert api.get(f"/api/submissions/{bob_best}").json()["optimization_score"]["score"] == 2
         with db.connect() as conn:
             assert (
                 conn.execute(
@@ -283,6 +299,7 @@ def test_ties_share_rank_and_keep_earliest_best_submission(scoring_setup, accoun
         sign_in(api)
         rows = api.get("/api/leaderboard").json()["items"]
         assert [r["rank"] for r in rows] == [1, 1, 3]
+        assert [r["score"] for r in rows] == [1, 1, 0.5]
         assert rows[0]["submission_id"] == alice
 
 
@@ -310,7 +327,7 @@ def test_voided_scores_are_removed_and_next_best_run_counts(scoring_setup, accou
     with TestClient(create_app(settings)) as api:
         sign_in(api, "admin")
         before = api.get(f"/api/submissions/{best}").json()
-        assert before["optimization_score"]["score"] == 0.5
+        assert before["optimization_score"]["score"] == 2
         assert api.get("/api/leaderboard").json()["items"][0]["submission_id"] == best
         response = api.post(f"/api/admin/submissions/{best}/void")
         assert response.status_code == 200
@@ -319,7 +336,7 @@ def test_voided_scores_are_removed_and_next_best_run_counts(scoring_setup, accou
         rankings = api.get("/api/leaderboard").json()["items"]
         assert [row["submission_id"] for row in rankings] == [bob, backup]
         assert [row["rank"] for row in rankings] == [1, 2]
-        assert rankings[1]["score"] == 1
+        assert [row["score"] for row in rankings] == [1.25, 1]
         assert best not in {row["id"] for row in db.leaderboard_candidates(catalog.version)}
         api.post(f"/api/admin/submissions/{backup}/void")
         assert [row["submission_id"] for row in api.get("/api/leaderboard").json()["items"]] == [

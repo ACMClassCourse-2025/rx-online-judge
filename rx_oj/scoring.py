@@ -1,9 +1,9 @@
-"""One cycle ratio per optimization testcase; lower geometric means rank first."""
+"""One baseline-to-submission cycle ratio per testcase; highest geometric means rank first."""
 
 import math
 
 OPT_LEVELS = ("0", "1", "2", "3", "s", "z")
-FORMULA = "exp(mean(log(testcase_cycles / baseline_cycles)))"
+FORMULA = "exp(mean(log(baseline_cycles / testcase_cycles)))"
 
 
 def optimization_cases(catalog):
@@ -64,7 +64,7 @@ def score_submission(submission, baseline, catalog):
             "case_id": case["case_id"],
             "cycles": cycles[case["case_id"]],
             "baseline_cycles": case["cycles"],
-            "ratio": cycles[case["case_id"]] / case["cycles"],
+            "ratio": case["cycles"] / cycles[case["case_id"]],
         }
         for case in baseline["cases"]
     ]
@@ -78,7 +78,7 @@ def leaderboard(db, catalog, viewer):
     response = {
         "status": status,
         "formula": FORMULA,
-        "lower_is_better": True,
+        "lower_is_better": False,
         "baseline": None,
         "items": [],
     }
@@ -112,9 +112,9 @@ def leaderboard(db, catalog, viewer):
             ),
         }
         owner = submission["owner_id"]
-        if owner not in best or row["score"] < best[owner]["score"]:
+        if owner not in best or row["score"] > best[owner]["score"]:
             best[owner] = row
-    rows = sorted(best.values(), key=lambda r: (r["score"], r["finished_at"], r["submission_id"]))
+    rows = sorted(best.values(), key=lambda r: (-r["score"], r["finished_at"], r["submission_id"]))
     for index, row in enumerate(rows):
         row["rank"] = (
             rows[index - 1]["rank"]

@@ -462,6 +462,15 @@
   font-weight: 400;
   color: var(--run-accent);
 }
+.ride-details-control {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 8px;
+}
+.is-detailed .ride-details-hint {
+  display: none;
+}
 .ride-peek {
   flex-shrink: 0;
   width: 32px;
@@ -739,8 +748,20 @@
     transform: translateY(-242px) scaleY(1.6);
   }
   .ride-progress-label {
-    gap: 10px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 10px;
     font-size: 10px;
+  }
+  .ride-details-control {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+  .is-detailed .ride-progress-label {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+  }
+  .is-detailed .ride-details-control {
+    grid-column: auto;
   }
   .ride-live {
     width: auto;

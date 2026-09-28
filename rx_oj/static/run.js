@@ -421,7 +421,7 @@ const RunPage = (() => {
     );
     el("ride-progress-fill").style.width = `${progress}%`;
     const brief = s.optimization_score
-      ? `Optimization score ${scoreText(s.optimization_score.score)} · lower is better`
+      ? `Optimization score ${scoreText(s.optimization_score.score)}`
       : queued || ["fetching", "dependencies", "building"].includes(s.phase)
         ? phase
         : `${done ? (accepted ? "All tests passed" : label(s.status)) : names[stage]} · ${number(s.completed)} / ${number(s.total)} checked`;

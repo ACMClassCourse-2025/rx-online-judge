@@ -857,20 +857,6 @@ pre {
 .leaderboard-content {
   padding-block: 30px 64px;
 }
-.score-explainer {
-  margin-bottom: 38px;
-}
-.score-explainer > p {
-  font-size: 17px;
-}
-.score-explainer > p strong {
-  color: var(--green);
-}
-.score-explainer > a {
-  display: inline-block;
-  margin-top: 10px;
-  font-size: 14px;
-}
 .leaderboard-panel > .table-scroll > table {
   min-width: 720px;
 }

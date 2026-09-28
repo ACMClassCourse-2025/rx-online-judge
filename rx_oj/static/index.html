@@ -398,14 +398,17 @@
                     <div class="ride-progress-label">
                       <p id="ride-brief" role="status">Waiting for a worker</p>
                       <strong id="ride-percent">0%</strong>
-                      <button
-                        id="ride-peek"
-                        class="ride-peek"
-                        aria-label="Show results and system log"
-                        title="Show results and system log"
-                      >
-                        ↓
-                      </button>
+                      <div class="ride-details-control">
+                        <span class="ride-details-hint">Scroll down to view details.</span>
+                        <button
+                          id="ride-peek"
+                          class="ride-peek"
+                          aria-label="Show results and system log"
+                          title="Show results and system log"
+                        >
+                          ↓
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -460,7 +463,6 @@
                       <a href="#leaderboard">View leaderboard ↗</a>
                       <details id="run-score-details" hidden>
                         <summary>Testcase ratios</summary>
-                        <p><a href="#about/scoring">How scoring works ↗</a></p>
                         <p id="run-score-baseline" class="ride-score-baseline"></p>
                         <div id="run-score-cases"></div>
                       </details>
@@ -490,13 +492,6 @@
           </div>
         </div>
         <div class="wrap leaderboard-content">
-          <div class="score-explainer">
-            <p>
-              <strong>1.0</strong> matches Rust. <strong>Lower</strong> is
-              better. Your best accepted run counts.
-            </p>
-            <a href="#about/scoring">How scoring works ↗</a>
-          </div>
           <section class="leaderboard-panel" aria-labelledby="rankings-title">
             <div class="panel-heading">
               <div>
@@ -526,7 +521,7 @@
                   <tr>
                     <th scope="col">Rank</th>
                     <th scope="col">Account</th>
-                    <th scope="col">Score ↓</th>
+                    <th scope="col">Score</th>
                     <th scope="col">Best submission</th>
                     <th scope="col">Language</th>
                     <th scope="col">Achieved</th>
@@ -704,11 +699,11 @@
               <span class="eyebrow">01 / THE SCORE</span>
               <h2 id="about-scoring" class="underlined" tabindex="-1">How scoring works</h2>
               <p>
-                Your score is the geometric mean of your cycles divided by the Rust
-                baseline for each optimization testcase, with cycles summed across all
+                Your score is the geometric mean of the Rust baseline cycles divided by
+                your cycles for each optimization testcase, with cycles summed across all
                 inputs. The baseline uses the lowest correct total across Rust
                 optimization levels 0, 1, 2, 3, s, and z.
-                <strong>Lower is better; 1.0 matches Rust.</strong>
+                <strong>1.0 matches Rust; scores above 1.0 beat the baseline.</strong>
                 Your best fully accepted optimization run on the current test catalog
                 counts; <strong>Voided</strong> runs are excluded.
               </p>
