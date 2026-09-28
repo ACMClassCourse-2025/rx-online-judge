@@ -1,6 +1,7 @@
 from dataclasses import replace
 
 from fastapi.testclient import TestClient
+from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from rx_oj.api import create_app
 from rx_oj.auth import COOKIE_NAME, password_hash, token_hash, verify_password
@@ -125,3 +126,38 @@ def test_password_reset_racing_with_login_cannot_restore_old_session(settings, a
     db.reset_password(accounts["alice"], password_hash("operator replaced password"))
     assert not db.start_session("old-token", accounts["alice"], "csrf", 3600, "attempt", old)
     assert db.session("old-token") is None
+
+
+def test_https_tunnel_preserves_origin_and_csrf_checks(settings, accounts):
+    app = create_app(replace(settings, secure_cookies=True))
+    forwarded = {
+        "Origin": "https://judge.example.com",
+        "X-Forwarded-Proto": "https",
+        "X-Forwarded-For": "203.0.113.10",
+    }
+    credentials = {"username": "alice", "password": "correct horse battery staple"}
+    # The connector reaches Uvicorn over HTTP from another container, not loopback.
+    with TestClient(
+        ProxyHeadersMiddleware(app, trusted_hosts="127.0.0.1"),
+        base_url="http://judge.example.com",
+    ) as client:
+        assert (
+            client.post("/api/auth/login", json=credentials, headers=forwarded).status_code == 403
+        )
+    with TestClient(
+        ProxyHeadersMiddleware(app, trusted_hosts="*"), base_url="http://judge.example.com"
+    ) as client:
+        response = client.post("/api/auth/login", json=credentials, headers=forwarded)
+        assert response.status_code == 200
+        assert "secure" in response.headers["set-cookie"].lower()
+        # A browser sends the Secure cookie to the HTTPS edge; the connector relays it over HTTP.
+        client.headers.update(forwarded)
+        client.headers["Cookie"] = f"{COOKIE_NAME}={response.cookies.get(COOKIE_NAME)}"
+        assert client.get("/api/auth/me").status_code == 200
+        assert client.post("/api/auth/logout").status_code == 403
+        client.headers["X-CSRF-Token"] = response.json()["csrf_token"]
+        assert (
+            client.post("/api/auth/logout", headers={"Origin": "https://evil.test"}).status_code
+            == 403
+        )
+        assert client.post("/api/auth/logout").status_code == 200

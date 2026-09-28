@@ -11,6 +11,7 @@ services:
       - "127.0.0.1:${OJ_PORT:-8000}:8000"
     environment:
       OJ_SECURE_COOKIES: ${OJ_SECURE_COOKIES:-0}
+      FORWARDED_ALLOW_IPS: ${OJ_FORWARDED_ALLOW_IPS:-127.0.0.1}
       OJ_GIT_HOSTS: ${OJ_GIT_HOSTS:-github.com,gitlab.com,codeberg.org,gitee.com}
     volumes:
       - judge-data:/data
@@ -91,6 +92,21 @@ services:
       timeout: 3s
       retries: 3
       start_period: 5s
+    restart: unless-stopped
+
+  cloudflared:
+    profiles: [cloudflare]
+    image: cloudflare/cloudflared:2026.9.3
+    command: ["tunnel", "run"]
+    environment:
+      # Keep the token out of command-line arguments. Set it in the ignored .env file.
+      TUNNEL_TOKEN: ${OJ_CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      api:
+        condition: service_started
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
     restart: unless-stopped
 
   baseline:

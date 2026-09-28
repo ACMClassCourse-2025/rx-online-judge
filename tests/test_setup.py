@@ -39,6 +39,8 @@ def test_refresh_stale_group_and_preserve_settings(tmp_path, docker_socket, monk
     unchanged = (
         f"# This file was copied from another host.\nOJ_DOCKER_SOCKET='{docker_socket}'\n"
         "OJ_PORT=9000\nOJ_SECURE_COOKIES=1\nOJ_GIT_HOSTS=git.example.org\n"
+        "COMPOSE_PROFILES=git-proxy,cloudflare\nOJ_CLOUDFLARE_TUNNEL_TOKEN=test-only-token\n"
+        "OJ_FORWARDED_ALLOW_IPS=*\n"
         "RX_TESTS_PATH=/custom/testcases\n"
     )
     env.write_text(unchanged + f"OJ_DOCKER_GID={docker_socket.stat().st_gid + 1}\n")

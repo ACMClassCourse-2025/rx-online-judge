@@ -186,8 +186,8 @@ lowercase and have 3–40 letters, digits, dots, underscores, or hyphens.
   revoke every session belonging to the user. Login failures are throttled per username
   and client IP over a five-minute window.
 
-For HTTPS deployment, set `OJ_SECURE_COOKIES=1` and configure Uvicorn's trusted proxy
-settings to recognize your proxy's forwarded scheme. Browser origins must match the API
+For HTTPS deployment, set `OJ_SECURE_COOKIES=1` and configure `OJ_FORWARDED_ALLOW_IPS`
+in Compose to recognize your proxy's forwarded scheme. Browser origins must match the API
 origin. There is no cookie-free shared-token or unauthenticated development bypass.
 
 ## Submit from Git
@@ -448,6 +448,54 @@ docker compose logs --tail=50 worker
 
 Recreation is necessary to apply changed supplementary groups; restarting an existing
 container does not update them.
+
+### Cloudflare Tunnel
+
+The optional `cloudflare` Compose profile runs the Cloudflare connector alongside the
+judge. It forwards your public HTTPS hostname to `http://api:8000` through an outbound
+tunnel, so the API can keep its default host-loopback port binding.
+
+1. In the Cloudflare dashboard, create a remotely managed **Cloudflared** tunnel and
+   copy its tunnel token.
+2. Add a published application route (public hostname), such as `judge.example.com`,
+   with service type **HTTP** and URL **`api:8000`**. Keep the original HTTP Host header;
+   do not override it with `api` or `localhost`.
+   Enable **SSL/TLS → Edge Certificates → Always Use HTTPS** for your domain to
+   redirect HTTP visitors to HTTPS. Cloudflare manages the public TLS certificate.
+3. Add these settings to the server's `.env`:
+
+   ```dotenv
+   COMPOSE_PROFILES=cloudflare
+   OJ_CLOUDFLARE_TUNNEL_TOKEN=your-tunnel-token
+   OJ_SECURE_COOKIES=1
+   OJ_FORWARDED_ALLOW_IPS=*
+   ```
+
+   If the Git proxy is already enabled, use `COMPOSE_PROFILES=git-proxy,cloudflare`.
+   `make setup` preserves these settings. The token stays in the ignored `.env` file
+   and is passed only to the connector, through its environment.
+
+4. Start the judge and connector:
+
+   ```sh
+   make up
+   docker compose logs --tail=50 cloudflared
+   ```
+
+Open your public hostname over HTTPS and sign in with a judge account. Cloudflare
+terminates HTTPS; the connector reaches the API over the Compose network. The forwarded
+header setting lets Uvicorn recognize the original HTTPS scheme for login and CSRF
+checks. `*` trusts the services on this Compose network; keep the API port bound to
+`127.0.0.1` and this network limited to trusted services. Secure cookies require using
+the HTTPS hostname for sign-in.
+
+The connector needs outbound access to Cloudflare on port `7844` (UDP for QUIC or TCP
+for HTTP/2). No inbound port or separate host service is required. The connector
+restarts with Docker; its version is pinned in `compose.yaml`.
+
+To disable the tunnel, run `docker compose stop cloudflared` before removing `cloudflare`
+from `COMPOSE_PROFILES`. For local HTTP access again, restore `OJ_SECURE_COOKIES=0`,
+remove `OJ_FORWARDED_ALLOW_IPS`, and run `make up`.
 
 ### Git fetch proxy
 
