@@ -282,9 +282,8 @@ Clang commands control judging. LLVM IR compilation errors appear in case diagno
 
 Implementation images support C/C++ (GCC 14), Rust 1.95, Python 3.13 with pip and venv,
 Java 21 with Maven, and Node.js 22 with npm. Compiler executables run on the host
-architecture. The Rust image also includes the `riscv32im-unknown-none-elf`
-cross-compilation target for the reference runtime and test programs. Build and execution
-containers have no network access. Supported package dependencies are prepared separately
+architecture. Build and execution containers have no network access. Supported package
+dependencies are prepared separately
 as described below; other dependencies must be vendored or installed in operator-owned images.
 The tiny compilers in
 `examples/python` and `examples/cpp` support only `tests/fixtures/suites` for installation

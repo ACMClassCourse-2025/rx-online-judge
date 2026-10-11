@@ -56,7 +56,6 @@ RUN install -D /tmp/antlr4-cpp-runtime-config.cmake \
 USER 1000:1000
 
 FROM rust:1.95-slim-trixie AS rust-toolchain
-RUN rustup target add riscv32im-unknown-none-elf
 
 FROM cpp-base AS rust
 USER root
