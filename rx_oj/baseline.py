@@ -12,7 +12,7 @@ from pathlib import Path
 import docker
 
 from .archives import pack_files
-from .catalog import Catalog, load_languages
+from .catalog import Catalog
 from .config import ROOT, Settings
 from .db import Database
 from .grading import Judge
@@ -86,8 +86,7 @@ def generate_baseline(settings, reference, client, report=print):
     source_digest = hashlib.sha256()
     for name, content in sorted(files.items()):
         source_digest.update(name.encode() + b"\0" + content + b"\0")
-    languages = load_languages(settings.languages_file)
-    image = client.images.get(languages["rust"]["image"]).id
+    image = client.images.get(settings.reference_rust_image).id
     runtime_image = client.images.get(settings.runtime_image).id
     settings = replace(settings, runtime_image=runtime_image)
     job_id = "baseline-" + uuid.uuid4().hex

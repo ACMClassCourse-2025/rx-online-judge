@@ -45,6 +45,22 @@ for language in args.languages:
         cwd=root,
         check=True,
     )
+if "rust" in args.languages:
+    subprocess.run(
+        [
+            "docker",
+            "build",
+            "-f",
+            "docker/languages.Dockerfile",
+            "--target",
+            "rust-reference",
+            "-t",
+            "rx-oj-rust-reference:local",
+            ".",
+        ],
+        cwd=root,
+        check=True,
+    )
 subprocess.run(
     [
         "docker",

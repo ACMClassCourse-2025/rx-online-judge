@@ -89,8 +89,9 @@ make setup
 docker compose run --rm --no-deps baseline
 ```
 
-This uses the official Rust toolchain in the configured `rust` language image, testcases
-from this repository's `testcases/official` submodule, the reference helpers and `config.mk`
+This uses the reference-only Rust image (`rx-oj-rust-reference:local`), which includes the
+RV32IM target needed by the official helper, while the student `rust` image remains host-only.
+It uses testcases from this repository's `testcases/official` submodule, the reference helpers and `config.mk`
 from the pinned `vendor/rx-compiler` submodule, and the judge's trusted REIMU image.
 Set `RX_REFERENCE_PATH` for a different reference checkout. Compilation and execution
 use the same offline containers, limits, inputs, and correctness checks as submissions.

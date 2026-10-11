@@ -113,6 +113,8 @@ services:
     extends:
       service: worker
     profiles: [tools]
+    environment:
+      OJ_REFERENCE_RUST_IMAGE: ${OJ_REFERENCE_RUST_IMAGE:-rx-oj-rust-reference:local}
     command:
       - python
       - -m

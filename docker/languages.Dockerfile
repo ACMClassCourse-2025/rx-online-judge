@@ -57,10 +57,20 @@ USER 1000:1000
 
 FROM rust:1.95-slim-trixie AS rust-toolchain
 
+FROM rust-toolchain AS rust-reference-toolchain
+RUN rustup target add riscv32im-unknown-none-elf
+
 FROM cpp-base AS rust
 USER root
 COPY --from=rust-toolchain /usr/local/rustup /usr/local/rustup
 COPY --from=rust-toolchain /usr/local/cargo /usr/local/cargo
+ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo PATH=/usr/local/cargo/bin:$PATH
+USER 1000:1000
+
+FROM cpp-base AS rust-reference
+USER root
+COPY --from=rust-reference-toolchain /usr/local/rustup /usr/local/rustup
+COPY --from=rust-reference-toolchain /usr/local/cargo /usr/local/cargo
 ENV RUSTUP_HOME=/usr/local/rustup CARGO_HOME=/usr/local/cargo PATH=/usr/local/cargo/bin:$PATH
 USER 1000:1000
 

@@ -59,6 +59,9 @@ class Settings:
     runtime_image: str = field(
         default_factory=lambda: os.getenv("OJ_RUNTIME_IMAGE", "rx-oj-reimu:local")
     )
+    reference_rust_image: str = field(
+        default_factory=lambda: os.getenv("OJ_REFERENCE_RUST_IMAGE", "rx-oj-rust-reference:local")
+    )
     ir_image: str = field(default_factory=lambda: os.getenv("OJ_IR_IMAGE", "rx-oj-clang:local"))
     docker_runtime: str | None = field(
         default_factory=lambda: os.getenv("OJ_DOCKER_RUNTIME") or None
