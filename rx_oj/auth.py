@@ -10,7 +10,7 @@ COOKIE_NAME = "rx_oj_session"
 
 def username(value: str) -> str:
     value = value.strip().lower()
-    if not re.fullmatch(r"[a-z0-9][a-z0-9_.-]{2,39}", value):
+    if not re.fullmatch(r"[^\W_][\w.-]{2,39}", value):
         raise ValueError("Username must be 3–40 letters, digits, dots, underscores, or hyphens")
     return value
 

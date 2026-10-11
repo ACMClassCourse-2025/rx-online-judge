@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
 from rx_oj.api import create_app
-from rx_oj.auth import COOKIE_NAME, password_hash, token_hash, verify_password
+from rx_oj.auth import COOKIE_NAME, password_hash, token_hash, username, verify_password
 from rx_oj.db import Database
 
 
@@ -29,6 +29,18 @@ def test_login_logout_cookie_flags_and_no_registration(settings, accounts, sign_
         assert client.get("/api/auth/me").status_code == 401
         client.cookies.set(COOKIE_NAME, cookie)
         assert client.get("/api/auth/me").status_code == 401
+
+
+def test_username_accepts_unicode_letters_and_rejects_invalid_punctuation():
+    assert username(" 靳泊楠 ") == "靳泊楠"
+    assert username("Élodie-2") == "élodie-2"
+    for value in ("_靳泊楠", "靳 泊楠", "靳/泊楠", "ab"):
+        try:
+            username(value)
+        except ValueError:
+            pass
+        else:
+            raise AssertionError(f"invalid username accepted: {value!r}")
 
 
 def test_csrf_and_cross_origin_rejected(settings, accounts, sign_in):
