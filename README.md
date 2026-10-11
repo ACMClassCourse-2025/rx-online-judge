@@ -300,7 +300,7 @@ and submitted build commands are never evaluated by the worker or by the proxy.
 | Python | `requirements.txt` | Download wheels with `--require-hashes --only-binary=:all:`; install offline into `/workspace/.venv` |
 | JavaScript | `package.json`, `package-lock.json` | `npm ci --ignore-scripts`; repeat `npm ci --offline` with lifecycle scripts enabled in the build sandbox |
 | Java | `pom.xml` | Maven `dependency:go-offline`; `BUILD` uses the local repository with offline mode enabled |
-| C/C++ | — | Include dependencies in the repository or operator-owned image |
+| C/C++ | — | ANTLR4 C++ runtime 4.9.1 is included; CMake also supports the standalone `antlr4-cpp-runtime` package and `antlr4_cpp_runtime` target name; other dependencies must be vendored or installed in the operator-owned image |
 
 Python requirements must pin all direct and transitive packages with hashes. Source-only
 Python distributions are unsupported; a wheel compatible with the image's Python and
