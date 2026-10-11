@@ -248,6 +248,8 @@ def create_app(settings: Settings | None = None):
     def submit(body: Submission, user: Authenticated):
         if body.language not in app.state.languages:
             raise HTTPException(422, "Unknown compiler language")
+        if user["repository_locked"] and body.repository_url != user["repository_url"]:
+            raise HTTPException(422, "Repository URL is locked for this account")
         try:
             validate_repository(body.repository_url, body.git_ref, settings.git_hosts)
             cases = app.state.catalog.select_suite(body.suite)

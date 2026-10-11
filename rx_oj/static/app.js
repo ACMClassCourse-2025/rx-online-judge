@@ -70,6 +70,8 @@ function clearSession() {
   renderLeaderboard({ status: "signed_out", items: [] });
   $("access-button").textContent = "Sign in";
   $("submission-fields").disabled = true;
+  $("repository-url").value = "";
+  $("repository-url").readOnly = false;
   $("submit-button").innerHTML =
     'Sign in to submit <span aria-hidden="true">→</span>';
   $("refresh").disabled = true;
@@ -324,6 +326,8 @@ async function initialize() {
     state.sessionReady = true;
     state.csrf = session.csrf_token;
     state.unauthorized = false;
+    $("repository-url").value = state.user.repository_url || "";
+    $("repository-url").readOnly = Boolean(state.user.repository_locked);
     $("access-button").textContent = state.user.username;
     $("account-name").textContent =
       `${state.user.username}${state.user.is_admin ? " · Administrator" : ""}`;

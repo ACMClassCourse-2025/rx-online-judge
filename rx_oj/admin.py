@@ -8,12 +8,20 @@ import sys
 from .auth import password_hash, username
 from .config import Settings
 from .db import Database
+from .repositories import RepositoryError, validate_repository
 
 
 def main():
     parser = argparse.ArgumentParser(description="Manage judge accounts (no web registration)")
     actions = parser.add_subparsers(dest="action", required=True)
-    for command in ("create-user", "reset-password", "disable-user", "enable-user"):
+    for command in (
+        "create-user",
+        "reset-password",
+        "disable-user",
+        "enable-user",
+        "set-repository",
+        "unlock-repository",
+    ):
         action = actions.add_parser(command)
         action.add_argument("username")
         if command in ("create-user", "reset-password"):
@@ -24,6 +32,8 @@ def main():
             )
         if command == "create-user":
             action.add_argument("--admin", action="store_true")
+        if command == "set-repository":
+            action.add_argument("repository_url")
     actions.add_parser("list-users")
     args = parser.parse_args()
     db = Database(Settings().db_path)
@@ -31,11 +41,13 @@ def main():
         if args.action == "list-users":
             with db.connect() as conn:
                 for row in conn.execute(
-                    "SELECT username, is_admin, active FROM users ORDER BY username"
+                    """SELECT username, is_admin, active, repository_locked
+                    FROM users ORDER BY username"""
                 ):
                     print(
                         f"{row['username']}\t{'admin' if row['is_admin'] else 'student'}\t"
-                        f"{'active' if row['active'] else 'disabled'}"
+                        f"{'active' if row['active'] else 'disabled'}\t"
+                        f"{'repository-locked' if row['repository_locked'] else 'repository-open'}"
                     )
             return
         name = username(args.username)
@@ -55,10 +67,15 @@ def main():
                 db.create_user(name, encoded, args.admin)
             else:
                 db.reset_password(account["id"], encoded)
+        elif args.action == "set-repository":
+            validate_repository(args.repository_url, "HEAD", Settings().git_hosts)
+            db.set_repository(account["id"], args.repository_url)
+        elif args.action == "unlock-repository":
+            db.set_repository(account["id"], account["repository_url"], locked=False)
         else:
             db.set_active(account["id"], args.action == "enable-user")
         print(f"{args.action}: {name}")
-    except (ValueError, sqlite3.IntegrityError) as exc:
+    except (RepositoryError, ValueError, sqlite3.IntegrityError) as exc:
         parser.exit(1, f"Error: {exc}\n")
 
 

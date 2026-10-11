@@ -32,7 +32,9 @@ class Database:
                 CREATE TABLE IF NOT EXISTS users (
                     id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL,
                     password_hash TEXT NOT NULL, is_admin INTEGER NOT NULL DEFAULT 0,
-                    active INTEGER NOT NULL DEFAULT 1, created_at REAL NOT NULL
+                    active INTEGER NOT NULL DEFAULT 1, created_at REAL NOT NULL,
+                    repository_url TEXT NOT NULL DEFAULT '',
+                    repository_locked INTEGER NOT NULL DEFAULT 0
                 );
                 CREATE TABLE IF NOT EXISTS sessions (
                     token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id),
@@ -72,6 +74,13 @@ class Database:
             """)
             # Additive migration preserves histories and results from the shared-token version.
             conn.execute("BEGIN IMMEDIATE")
+            user_columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)")}
+            for name, definition in {
+                "repository_url": "TEXT NOT NULL DEFAULT ''",
+                "repository_locked": "INTEGER NOT NULL DEFAULT 0",
+            }.items():
+                if name not in user_columns:
+                    conn.execute(f"ALTER TABLE users ADD COLUMN {name} {definition}")
             columns = {row["name"] for row in conn.execute("PRAGMA table_info(submissions)")}
             for name, definition in {
                 "owner_id": "TEXT REFERENCES users(id)",
@@ -93,7 +102,9 @@ class Database:
         user_id = uuid.uuid4().hex
         with self.connect() as conn:
             conn.execute(
-                "INSERT INTO users VALUES (?, ?, ?, ?, 1, ?)",
+                """INSERT INTO users
+                (id, username, password_hash, is_admin, active, created_at)
+                VALUES (?, ?, ?, ?, 1, ?)""",
                 (user_id, username, encoded_password, int(is_admin), time.time()),
             )
         return user_id
@@ -116,6 +127,13 @@ class Database:
         with self.connect() as conn:
             conn.execute("UPDATE users SET active=? WHERE id=?", (int(active), user_id))
             conn.execute("DELETE FROM sessions WHERE user_id=?", (user_id,))
+
+    def set_repository(self, user_id, repository_url, locked=True):
+        with self.connect() as conn:
+            conn.execute(
+                "UPDATE users SET repository_url=?, repository_locked=? WHERE id=?",
+                (repository_url, int(locked), user_id),
+            )
 
     def reserve_login(self, username, address):
         with self.connect() as conn:
@@ -152,7 +170,8 @@ class Database:
     def session(self, token_hash):
         with self.connect() as conn:
             row = conn.execute(
-                """SELECT users.id, username, is_admin, csrf_token
+                """SELECT users.id, username, is_admin, repository_url, repository_locked,
+                csrf_token
                 FROM sessions JOIN users ON users.id=sessions.user_id
                 WHERE token_hash=? AND expires_at>? AND users.active=1""",
                 (token_hash, time.time()),
@@ -276,7 +295,14 @@ class Database:
         params = [owner_id, owner_id]
         if q:
             # Literal substring matching: %, _ and quotes have no special meaning.
-            fields = ("s.id", "s.name", "u.username", "repository_url", "git_ref", "commit_sha")
+            fields = (
+                "s.id",
+                "s.name",
+                "u.username",
+                "s.repository_url",
+                "s.git_ref",
+                "s.commit_sha",
+            )
             conditions.append(
                 "(" + " OR ".join(f"instr(lower({f}), lower(?))" for f in fields) + ")"
             )
@@ -292,7 +318,8 @@ class Database:
             rows = conn.execute(
                 f"""SELECT s.id, name, language, stage, stage AS suite, filter, status,
                 s.created_at, started_at, finished_at, total, completed, passed,
-                cycles, message, repository_url, git_ref, commit_sha, u.username AS owner,
+                cycles, message, s.repository_url, s.git_ref, s.commit_sha,
+                u.username AS owner,
                 cancel_requested, voided_at, status_before_void
                 {source} WHERE {where}
                 ORDER BY s.created_at DESC, s.id DESC LIMIT ? OFFSET ?""",

@@ -1,3 +1,4 @@
+import sqlite3
 from dataclasses import replace
 
 from fastapi.testclient import TestClient
@@ -126,6 +127,22 @@ def test_password_reset_racing_with_login_cannot_restore_old_session(settings, a
     db.reset_password(accounts["alice"], password_hash("operator replaced password"))
     assert not db.start_session("old-token", accounts["alice"], "csrf", 3600, "attempt", old)
     assert db.session("old-token") is None
+
+
+def test_existing_user_schema_gets_repository_lock_columns(settings, encoded_password):
+    with sqlite3.connect(settings.db_path) as conn:
+        conn.execute(
+            """CREATE TABLE users (
+            id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL, is_admin INTEGER NOT NULL DEFAULT 0,
+            active INTEGER NOT NULL DEFAULT 1, created_at REAL NOT NULL
+            )"""
+        )
+    db = Database(settings.db_path)
+    user_id = db.create_user("alice", encoded_password)
+    user = db.user_by_name("alice")
+    assert user["id"] == user_id
+    assert user["repository_url"] == "" and user["repository_locked"] == 0
 
 
 def test_https_tunnel_preserves_origin_and_csrf_checks(settings, accounts):

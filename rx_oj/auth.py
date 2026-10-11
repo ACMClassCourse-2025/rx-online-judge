@@ -40,4 +40,10 @@ def token_hash(token: str) -> str:
 
 
 def public_user(user):
-    return {key: user[key] for key in ("id", "username", "is_admin")}
+    return {
+        "id": user["id"],
+        "username": user["username"],
+        "is_admin": user["is_admin"],
+        "repository_url": user.get("repository_url", ""),
+        "repository_locked": bool(user.get("repository_locked", False)),
+    }

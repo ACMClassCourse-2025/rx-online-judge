@@ -68,6 +68,24 @@ def test_api_submission_validation_and_cancel(settings, accounts, sign_in):
         assert client.get("/api/submissions").json()["total"] == 1
 
 
+def test_locked_repository_is_prefilled_and_enforced(settings, accounts, sign_in):
+    repository = "https://github.com/course/locked-compiler.git"
+    Database(settings.db_path).set_repository(accounts["alice"], repository)
+    with TestClient(create_app(settings)) as client:
+        sign_in(client)
+        user = client.get("/api/auth/me").json()["user"]
+        assert user["repository_url"] == repository
+        assert user["repository_locked"] is True
+        assert submit(client, repository_url=repository).status_code == 202
+        response = submit(client, repository_url="https://github.com/course/other.git")
+        assert response.status_code == 422
+        assert response.json()["detail"] == "Repository URL is locked for this account"
+
+        sign_in(client, "bob")
+        user = client.get("/api/auth/me").json()["user"]
+        assert user["repository_url"] == "" and user["repository_locked"] is False
+
+
 @pytest.mark.parametrize("name_fields", [{}, {"name": None}, {"name": ""}, {"name": " \t "}])
 def test_submission_without_name_gets_a_persisted_label(settings, accounts, sign_in, name_fields):
     with TestClient(create_app(settings)) as client:

@@ -169,15 +169,20 @@ docker compose exec api python -m rx_oj.admin list-users
 docker compose exec api python -m rx_oj.admin reset-password alice
 docker compose exec api python -m rx_oj.admin disable-user alice
 docker compose exec api python -m rx_oj.admin enable-user alice
+docker compose exec api python -m rx_oj.admin set-repository alice https://github.com/course/compiler.git
+docker compose exec api python -m rx_oj.admin unlock-repository alice
 ```
 
 Use `--password-stdin` on create/reset for provisioning scripts; do not pass passwords in
 command-line arguments. Passwords must have 12–256 characters. Usernames are normalized to
 lowercase and have 3–40 letters, digits, dots, underscores, or hyphens.
+`set-repository` records and locks a user's public repository URL; `unlock-repository`
+keeps the prefilled URL but allows the user to edit it again.
 
 - Students list, inspect, and cancel **their own** submissions.
 - Administrators can inspect and cancel all submissions. Creating/resetting/disabling
-  accounts is an operator CLI action, not a public website endpoint.
+  accounts and managing repository locks are operator CLI actions, not public website
+  endpoints.
 - Users can change their own password from the account dialog.
 - Passwords use individually salted scrypt hashes (`N=32768, r=8, p=3`).
 - Sessions expire after 12 hours. Only token hashes are stored in SQLite. Cookies are
