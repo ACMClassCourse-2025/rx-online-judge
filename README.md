@@ -432,8 +432,8 @@ retention policy and backups for sustained use. Docker shares the host kernel; u
 worker machines and an isolation runtime such as gVisor for public, hostile submissions.
 
 Configuration: `OJ_DATA_DIR`, `OJ_TESTS_DIR`, `OJ_LANGUAGES_FILE`, `OJ_SECURE_COOKIES`,
-`OJ_GIT_HOSTS`, `OJ_GIT_PROXY`, `OJ_GIT_IMAGE`, `OJ_IR_IMAGE`, `OJ_RUNTIME_IMAGE`, and
-`OJ_DOCKER_RUNTIME`.
+`OJ_GIT_HOSTS`, `OJ_GIT_PROXY`, `OJ_GIT_IMAGE`, `OJ_IR_IMAGE`, `OJ_RUNTIME_IMAGE`,
+`OJ_REFERENCE_RUST_IMAGE`, and `OJ_DOCKER_RUNTIME`.
 `OJ_IR_IMAGE` defaults to `rx-oj-clang:local`, built by `scripts/build_images.py`.
 `OJ_DOCKER_RUNTIME=runsc` uses an already-installed gVisor runtime. Compose also supports
 `OJ_PORT`, `RX_TESTS_PATH`, `OJ_DOCKER_SOCKET`, and `OJ_DOCKER_GID`. For a custom Docker
