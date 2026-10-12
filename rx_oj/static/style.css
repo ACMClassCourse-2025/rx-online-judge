@@ -915,38 +915,17 @@ pre {
 .optimization-score a {
   margin-left: auto;
 }
-.site-footer {
-  background: var(--purple);
-  color: #e0daed;
-  padding-block: 30px;
-}
-.site-footer .wrap {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 20px;
-}
-.footer-brand {
-  font: 400 27px var(--display);
-  color: #fff;
-  text-decoration: none;
-}
-.footer-brand > span:first-child {
-  color: var(--yellow);
-}
-.footer-brand > span:last-child {
-  font:
-    14px "Fira Sans",
-    sans-serif;
-  color: #e0daed;
-  margin-left: 12px;
-}
 .connection {
   display: flex;
   align-items: center;
   gap: 9px;
   font-size: 13px;
+}
+.submit-panel .connection {
+  margin-top: 20px;
+  padding-top: 15px;
+  border-top: 1px solid #675e88;
+  color: #e0daed;
 }
 .status-dot {
   flex: 0 0 7px;
@@ -956,10 +935,6 @@ pre {
 }
 .status-dot.ready {
   background: #85dbb4;
-}
-.footer-target {
-  font: 11px var(--mono);
-  letter-spacing: 1px;
 }
 dialog {
   width: min(460px, calc(100% - 32px));
@@ -1091,9 +1066,6 @@ dialog p {
   .total-checks {
     padding-top: 6px;
     white-space: nowrap;
-  }
-  .footer-target {
-    display: none;
   }
 }
 @media (max-width: 540px) {
@@ -1228,9 +1200,6 @@ dialog p {
   }
   .leaderboard-content {
     padding-bottom: 40px;
-  }
-  .site-footer .wrap {
-    gap: 18px;
   }
   dialog {
     padding: 26px 22px;

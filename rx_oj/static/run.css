@@ -8,8 +8,7 @@
   background: var(--run-soft);
   min-height: 100svh;
 }
-.viewing-run .site-header,
-.viewing-run .site-footer {
+.viewing-run .site-header {
   display: none;
 }
 .viewing-run #main {
