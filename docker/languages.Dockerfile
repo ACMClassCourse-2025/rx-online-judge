@@ -20,8 +20,8 @@ USER 1000:1000
 
 FROM cpp-base AS antlr4-cpp-builder
 USER root
-ARG ANTLR4_VERSION=4.9.1
-ARG ANTLR4_COMMIT=5c2b686f95e1a42f302fefd99271863bf25b2e06
+ARG ANTLR4_VERSION=4.13.2
+ARG ANTLR4_COMMIT=cc82115a4e7f53d71d9d905caa2c2dfa4da58899
 RUN apt-get update && apt-get install -y --no-install-recommends git pkg-config uuid-dev \
     && rm -rf /var/lib/apt/lists/* \
     && git clone --depth 1 --branch "${ANTLR4_VERSION}" https://github.com/antlr/antlr4.git /tmp/antlr4 \

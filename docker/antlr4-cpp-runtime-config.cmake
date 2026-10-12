@@ -1,5 +1,5 @@
 # Compatibility package for https://github.com/adeharo9/antlr4-cpp-runtime.
-# The image ships the same ANTLR 4.9.1 runtime through the official CMake
+# The image ships the same ANTLR 4.13.2 runtime through the official CMake
 # package; expose the standalone project's target and variable names as aliases.
 
 include_guard(GLOBAL)

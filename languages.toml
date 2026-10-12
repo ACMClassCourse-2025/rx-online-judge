@@ -3,7 +3,7 @@
 id = "cpp"
 name = "C / C++"
 image = "rx-oj-cpp:local"
-description = "GCC 14, CMake, Make, Python 3, ANTLR4 C++ runtime 4.9.1 with antlr4-cpp-runtime compatibility"
+description = "GCC 14, CMake, Make, Python 3, ANTLR4 C++ runtime 4.13.2 with antlr4-cpp-runtime compatibility"
 
 [[languages]]
 id = "rust"
