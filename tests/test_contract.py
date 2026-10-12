@@ -54,6 +54,17 @@ def test_archive_types_sizes_and_wrapper():
         normalize_upload(pack_files({"config.mk": b"", "a": b"", "a/b": b""}), 1000)
 
 
+def test_tar_with_embedded_zip_is_parsed_as_tar():
+    embedded = io.BytesIO()
+    with zipfile.ZipFile(embedded, "w") as archive:
+        archive.writestr("antlr4-runtime.txt", "vendored")
+    data = pack_files({"config.mk": b"BUILD = true", "vendor/antlr4.zip": embedded.getvalue()})
+    assert tarfile.is_tarfile(io.BytesIO(data)) and zipfile.is_zipfile(io.BytesIO(data))
+    normalized = normalize_upload(data, 10000)
+    with tarfile.open(fileobj=io.BytesIO(normalized)) as archive:
+        assert archive.getnames() == ["config.mk", "vendor/antlr4.zip"]
+
+
 def test_links_and_zip_duplicates_rejected():
     buffer = io.BytesIO()
     with tarfile.open(fileobj=buffer, mode="w") as archive:

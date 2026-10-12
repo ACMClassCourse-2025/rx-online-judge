@@ -65,16 +65,11 @@ def normalize_upload(
         files[name] = content
 
     try:
-        if zipfile.is_zipfile(io.BytesIO(data)):
-            with zipfile.ZipFile(io.BytesIO(data)) as archive:
-                if len(archive.infolist()) > max_files:
-                    raise ArchiveError("Too many archive entries")
-                for item in archive.infolist():
-                    mode = item.external_attr >> 16
-                    regular = not stat.S_IFMT(mode) or stat.S_ISREG(mode)
-                    with archive.open(item) as stream:
-                        add(item.filename, item.file_size, stream, regular, item.is_dir())
-        else:
+        # A tar archive may contain a ZIP file. zipfile.is_zipfile() scans for a
+        # central directory anywhere near the end of the input, so checking it
+        # first can mistake a Git archive with vendored ZIP data for the ZIP
+        # itself. Prefer tar when both format detectors accept the input.
+        if tarfile.is_tarfile(io.BytesIO(data)):
             with tarfile.open(fileobj=io.BytesIO(data), mode="r:*") as archive:
                 for index, item in enumerate(archive):
                     if index >= max_files:
@@ -91,6 +86,17 @@ def normalize_upload(
                         continue
                     with archive.extractfile(item) as stream:
                         add(item.name, item.size, stream)
+        elif zipfile.is_zipfile(io.BytesIO(data)):
+            with zipfile.ZipFile(io.BytesIO(data)) as archive:
+                if len(archive.infolist()) > max_files:
+                    raise ArchiveError("Too many archive entries")
+                for item in archive.infolist():
+                    mode = item.external_attr >> 16
+                    regular = not stat.S_IFMT(mode) or stat.S_ISREG(mode)
+                    with archive.open(item) as stream:
+                        add(item.filename, item.file_size, stream, regular, item.is_dir())
+        else:
+            raise ArchiveError("Upload must be a valid ZIP or tar archive")
     except (tarfile.TarError, zipfile.BadZipFile, OSError, EOFError, RuntimeError) as exc:
         raise ArchiveError("Upload must be a valid ZIP or tar archive") from exc
 
