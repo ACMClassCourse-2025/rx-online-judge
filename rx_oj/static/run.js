@@ -30,6 +30,10 @@ const RunPage = (() => {
   let visible = true;
   let scrollFrame = 0;
   let previousStatus = "";
+  let focusDetails = false;
+  const filters = { stage: "all", verdict: "all", query: "" };
+  const expandedResults = new Set();
+  let renderedResults = "";
   const revealDistance = 520;
 
   function mountArt() {
@@ -148,16 +152,15 @@ const RunPage = (() => {
     const amount = Math.min(1, Math.max(0, -top / distance));
     el("ride-sticky").style.setProperty("--reveal", amount.toFixed(4));
     el("ride-sticky").classList.toggle("is-detailed", amount > 0.85);
-    el("ride-stages").setAttribute("aria-hidden", String(amount < 0.5));
-    el("ride-copy").setAttribute("aria-hidden", String(amount >= 0.5));
-    el("ride-live").inert = !narrow.matches && amount < 0.85;
-    el("ride-peek").setAttribute(
-      "aria-label",
-      amount > 0.85 ? "Back to full scene" : "Show results and system log",
-    );
-    el("ride-peek").title =
-      amount > 0.85 ? "Back to full scene" : "Show results and system log";
-    el("ride-peek").textContent = amount > 0.85 ? "↑" : "↓";
+    const detailed = amount > 0.85;
+    const action = detailed ? "Back to full scene" : "View run details";
+    el("ride-view-details").firstElementChild.textContent = action;
+    el("ride-view-details").lastElementChild.textContent = detailed ? "↑" : "↓";
+    el("ride-view-details").setAttribute("aria-expanded", String(detailed));
+    if (focusDetails && amount >= 0.99) {
+      focusDetails = false;
+      el("ride-live-title").focus({ preventScroll: true });
+    }
   }
   function scheduleScroll() {
     if (!scrollFrame) scrollFrame = requestAnimationFrame(scrollLayout);
@@ -172,6 +175,19 @@ const RunPage = (() => {
     mountArt();
     submission = null;
     previousStatus = "";
+    focusDetails = false;
+    Object.assign(filters, { stage: "all", verdict: "all", query: "" });
+    expandedResults.clear();
+    renderedResults = "";
+    el("ride-case-search").value = "";
+    el("ride-verdict-filter").value = "all";
+    el("ride-clear-filters").hidden = true;
+    el("ride-result-count").textContent = "";
+    el("ride-results").replaceChildren();
+    el("ride-results-empty").hidden = false;
+    el("ride-empty-title").textContent = "Loading your run…";
+    el("ride-empty-description").textContent = "Test results will appear here.";
+    el("ride-system-log").open = false;
     el("run-name").textContent = "Loading your run…";
     el("run-meta").textContent = "";
     el("run-status").textContent = "";
@@ -190,9 +206,11 @@ const RunPage = (() => {
     el("ride-scene").dataset.theme = "semantic";
     el("ride-scene").classList.remove("is-boarding");
     el("ride-headline").textContent = "Ready to roll.";
+    el("ride-eyebrow").textContent = "YOUR COMPILER / IN THE QUEUE";
     el("ride-caption").textContent =
       "A little patience. The open road is just ahead.";
     el("ride-stages").replaceChildren();
+    el("ride-stages").removeAttribute("data-stages");
     el("ride-current-label").textContent = "Loading your run…";
     el("ride-current-case").textContent = "";
     el("ride-brief").textContent = "Loading your run…";
@@ -202,7 +220,7 @@ const RunPage = (() => {
     el("ride-progress").setAttribute("aria-valuetext", "Loading your run");
     el("ride-sign-title").textContent = "NEXT UP";
     el("ride-sign-value").textContent = "YOUR TURN →";
-    el("ride-live-title").textContent = "Current run";
+    el("ride-live-title").textContent = "Run details";
   }
   function error(message) {
     el("run-error").textContent = message;
@@ -250,6 +268,126 @@ const RunPage = (() => {
     if (s.phase === "testing" || s.results.length)
       return `Testing · ${names[stage]}`;
     return "Preparing your compiler";
+  }
+  function testcaseName(caseId) {
+    return caseId
+      .replace(/@[^@]+$/, "")
+      .replace(/^(semantic|codegen|optimization)\//, "")
+      .replace(/\.rx$/, "")
+      .replace(/(^|\/)(acc|rej)-/g, "$1")
+      .replaceAll("/", " / ");
+  }
+  function renderStageFilters(s, counts, current) {
+    const choices = [
+      { id: "all", title: "All stages", completed: s.results.length },
+      ...counts.map((c) => ({
+        ...c,
+        title: c.id === "codegen" ? "Codegen" : names[c.id],
+      })),
+    ];
+    const list = el("ride-stages");
+    const ids = choices.map((c) => c.id).join(",");
+    if (list.dataset.stages !== ids) {
+      list.dataset.stages = ids;
+      list.innerHTML = choices
+        .map(
+          (c) => `<li><button type="button" data-stage="${c.id}" aria-pressed="false"><span>${c.title}</span><span class="ride-stage-count"></span><span class="ride-stage-dot" aria-hidden="true" ${c.id === "all" ? "hidden" : ""}></span></button></li>`,
+        )
+        .join("");
+    }
+    for (const c of choices) {
+      const button = list.querySelector(`[data-stage="${c.id}"]`);
+      button.setAttribute("aria-pressed", String(filters.stage === c.id));
+      button.classList.toggle("has-failures", Boolean(c.failed));
+      button.querySelector(".ride-stage-count").textContent = number(c.completed);
+      const progress =
+        c.id === "all"
+          ? `${number(c.completed)} results`
+          : `${number(c.completed)}${c.total === null ? "" : ` of ${number(c.total)}`} checked, ${number(c.failed)} failed${c.id === current && !terminal(s.status) ? ", current stage" : ""}`;
+      button.title = `${c.title}: ${progress}`;
+      button.setAttribute("aria-label", `${c.title}: ${progress}`);
+    }
+  }
+  function renderResults(s) {
+    const list = el("ride-results");
+    for (const row of list.children) {
+      if (row.open) expandedResults.add(row.dataset.case);
+      else expandedResults.delete(row.dataset.case);
+    }
+    const query = filters.query
+      .trim()
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean);
+    const results = s.results.filter((r) => {
+      const passed = r.verdict === "accepted";
+      const searchable = `${r.case_id} ${testcaseName(r.case_id)}`.toLowerCase();
+      return (
+        (filters.stage === "all" || r.stage === filters.stage) &&
+        (filters.verdict === "all" || passed === (filters.verdict === "passed")) &&
+        query.every((word) => searchable.includes(word))
+      );
+    });
+    const filtered =
+      filters.stage !== "all" || filters.verdict !== "all" || query.length > 0;
+    el("ride-clear-filters").hidden = !filtered;
+    const count = `${number(results.length)} ${results.length === 1 ? "result" : "results"}`;
+    el("ride-result-count").textContent = filtered
+      ? `${count} of ${number(s.results.length)}`
+      : `${count}${terminal(s.status) ? "" : " · updating live"}`;
+    const html = results.map((r) => {
+      const passed = r.verdict === "accepted";
+      const output = [r.message, r.log].filter(Boolean).join("\n");
+      const metrics = `${names[r.stage] || label(r.stage)} · ${(r.duration_ms / 1000).toFixed(2)}s${r.stage === "optimization" && passed ? ` · ${number(r.cycles)} cycles` : ""}`;
+      return `<details class="ride-result" data-case="${escapeHTML(r.case_id)}" ${expandedResults.has(r.case_id) ? "open" : ""}>
+        <summary title="${escapeHTML(r.case_id)}">
+          <span class="ride-result-status ${passed ? "is-passed" : ""}">${passed ? "PASS" : "FAIL"}</span>
+          <span class="ride-result-name"><span class="ride-result-path">${escapeHTML(testcaseName(r.case_id))}</span><span class="ride-result-stage">${escapeHTML(names[r.stage] || label(r.stage))}</span></span>
+          <span class="ride-result-verdict">${escapeHTML(label(r.verdict))}</span>
+          <span class="ride-result-arrow" aria-hidden="true">⌄</span>
+        </summary>
+        <div class="ride-result-output"><span class="ride-result-metrics">${escapeHTML(metrics)}</span>${output ? `<pre>${escapeHTML(output)}</pre>` : `<p>${passed ? "This testcase passed." : "No diagnostic output for this testcase."}</p>`}</div>
+      </details>`;
+    }).join("");
+    if (renderedResults !== html) {
+      // Keep a keyboard user's place when a live update replaces result rows.
+      const focused = list.contains(document.activeElement)
+        ? document.activeElement.closest(".ride-result")?.dataset.case
+        : null;
+      list.innerHTML = html;
+      renderedResults = html;
+      if (focused) {
+        [...list.children]
+          .find((row) => row.dataset.case === focused)
+          ?.querySelector("summary")
+          .focus({ preventScroll: true });
+      }
+    }
+    el("ride-results-empty").hidden = results.length > 0;
+    let title = "No results yet";
+    let description = "Test results will appear here as your compiler runs.";
+    if (filtered) {
+      title = "No matching testcases";
+      description = "Try another stage or testcase name, or clear the filters.";
+      if (!query.length && filters.verdict === "all" && !terminal(s.status)) {
+        title = "This stage hasn’t reported results yet";
+        description = "Results will appear here as the run reaches this stage.";
+      }
+    } else if (terminal(s.status)) {
+      title = s.status === "accepted" ? "No testcase results" : label(s.status);
+      description = "No tests completed. See the system log below for details.";
+    }
+    el("ride-empty-title").textContent = title;
+    el("ride-empty-description").textContent = description;
+  }
+  function applyFilters() {
+    if (!submission) return;
+    const counts = stageData(submission);
+    renderStageFilters(submission, counts, currentStage(submission, counts));
+    renderResults(submission);
+    const body = el("ride-live-body");
+    body.scrollTop +=
+      el("ride-results").getBoundingClientRect().top - body.getBoundingClientRect().top;
   }
   function renderScore(s) {
     const panel = el("run-score");
@@ -311,7 +449,6 @@ const RunPage = (() => {
       Boolean(s.optimization_score) && !submission?.optimization_score;
     const body = el("ride-live-body");
     const scrollTop = body.scrollTop;
-    const atBottom = body.scrollHeight - body.clientHeight - scrollTop < 30;
     submission = s;
     el("run-content").hidden = false;
     el("run-error").hidden = true;
@@ -325,10 +462,12 @@ const RunPage = (() => {
       ? Math.min(100, Math.floor((s.completed / s.total) * 100))
       : 0;
     el("run-name").textContent = s.name;
-    el("ride-live-title").textContent = s.name;
     el("run-meta").textContent =
       `${languageName(s.language)} · ${s.id.slice(0, 8)}`;
-    el("run-status").innerHTML = badge(s.status);
+    const failed = s.completed - s.passed;
+    el("run-status").innerHTML = failed && s.status !== "voided"
+      ? `<span class="badge wrong_answer">${number(failed)} failed</span>`
+      : badge(s.status);
     el("void-submission").hidden =
       !state.user?.is_admin || s.status === "voided";
     el("void-submission").onclick = () => ManagePage.confirmVoid(s);
@@ -338,6 +477,7 @@ const RunPage = (() => {
         ? `Voided by ${s.voided_by_name || "an administrator"}${s.voided_at ? ` · ${date(s.voided_at)}` : ""}. Previous status: ${label(s.status_before_void || "unknown")}. Excluded from optimization scoring.`
         : "";
     const facts = [
+      ["Submission", s.name],
       ["Account", s.owner || "Legacy submission"],
       ["Run ID", s.id],
       ["Suite", label(s.suite || s.stage)],
@@ -381,10 +521,12 @@ const RunPage = (() => {
       caption = "This run has been excluded from optimization scoring.";
     } else if (done) {
       caption = accepted
-        ? "Every check passed. Take a moment to enjoy the view."
+        ? `All ${number(s.total)} tests passed. Enjoy the view.`
         : s.status === "cancelled"
-          ? "Taking a breather. There’s always another ride."
-          : "A bump in the road. The System log has the details.";
+          ? `Run cancelled. ${number(s.completed)} of ${number(s.total)} tests checked.`
+          : failed
+            ? `${number(failed)} ${failed === 1 ? "test failed" : "tests failed"}. Review the errors below.`
+            : "The run stopped early. Review the system log below.";
       if (
         ["build_error", "source_error", "system_error", "time_limit"].includes(
           s.status,
@@ -402,13 +544,17 @@ const RunPage = (() => {
       caption = "Warming up the wheels. The first stretch is just ahead.";
     }
     el("ride-headline").textContent = headline;
+    el("ride-eyebrow").textContent =
+      `${languageName(s.language).toUpperCase()} / ${done ? "RUN COMPLETE" : phase.toUpperCase()}`;
     el("ride-caption").textContent = caption;
     el("ride-sign-title").textContent = queued
       ? "NEXT UP"
       : done
         ? accepted
           ? "ALL PASSED"
-          : label(s.status).toUpperCase()
+          : failed && s.status !== "voided" && s.status !== "cancelled"
+            ? "FAILED"
+            : label(s.status).toUpperCase()
         : "CHECKPOINT";
     el("ride-sign-value").textContent = queued
       ? "YOUR TURN →"
@@ -424,7 +570,7 @@ const RunPage = (() => {
       ? `Optimization score ${scoreText(s.optimization_score.score)}`
       : queued || ["fetching", "dependencies", "building"].includes(s.phase)
         ? phase
-        : `${done ? (accepted ? "All tests passed" : label(s.status)) : names[stage]} · ${number(s.completed)} / ${number(s.total)} checked`;
+        : `${number(s.completed)} / ${number(s.total)} checked`;
     if (el("ride-brief").textContent !== brief)
       el("ride-brief").textContent = brief;
     el("ride-current-label").textContent = phase;
@@ -440,12 +586,8 @@ const RunPage = (() => {
               : s.phase === "building"
                 ? "Running the build from config.mk."
                 : `${number(s.passed)} of ${number(s.total)} tests passed.`;
-    el("ride-stages").innerHTML = counts
-      .map((c, i) => {
-        const complete = c.total !== null && c.completed === c.total;
-        return `<li class="${c.id === stage ? "is-current" : ""} ${complete ? "is-complete" : ""} ${c.failed ? "has-failures" : ""}" ${c.id === stage ? 'aria-current="step"' : ""}><span class="ride-stage-number">${complete ? (c.failed ? "!" : "✓") : `0${i + 1}`}</span><span>${names[c.id]}</span></li>`;
-      })
-      .join("");
+    renderStageFilters(s, counts, stage);
+    renderResults(s);
     renderScore(s);
     const lines = [
       ["QUEUE", `Submitted ${date(s.created_at)}`],
@@ -456,39 +598,29 @@ const RunPage = (() => {
         ? [["GIT", `Resolved ${s.git_ref} → ${s.commit_sha.slice(0, 12)}`]]
         : []),
       ...(s.build_log ? [["BUILD", s.build_log]] : []),
-      ...s.results.map((r) => [
-        r.verdict === "accepted" ? "PASS" : "FAIL",
-        `${r.case_id} · ${label(r.verdict)} · ${(r.duration_ms / 1000).toFixed(2)}s${r.stage === "optimization" && r.verdict === "accepted" ? ` · ${number(r.cycles)} cycles` : ""}`,
-        [r.message, r.log].filter(Boolean).join("\n"),
-        r.case_id,
-      ]),
       ...(s.message ? [["JUDGE", s.message]] : []),
       ...(done
         ? [["DONE", `${label(s.status)} · ${s.passed} / ${s.total} passed`]]
         : [["NOW", phase]]),
     ];
     const log = el("ride-log");
-    const expanded = new Set(
-      [...log.querySelectorAll("details[open]")].map((d) => d.dataset.case),
-    );
     const logHTML = lines
       .map(
-        ([kind, message, detail, caseId]) =>
-          `<div class="ride-log-line"><span class="log-${kind.toLowerCase()}">${kind}</span><div><p>${escapeHTML(message)}</p>${detail ? `<details data-case="${escapeHTML(caseId)}" ${expanded.has(caseId) ? "open" : ""}><summary>Output</summary><pre>${escapeHTML(detail)}</pre></details>` : ""}</div></div>`,
+        ([kind, message]) =>
+          `<div class="ride-log-line"><span class="log-${kind.toLowerCase()}">${kind}</span><div>${kind === "BUILD" ? `<pre>${escapeHTML(message)}</pre>` : `<p>${escapeHTML(message)}</p>`}</div></div>`,
       )
       .join("");
+    const revealBuild = s.status === "build_error" && previousStatus !== "build_error";
     if (log.innerHTML !== logHTML) {
       log.innerHTML = logHTML;
-      body.scrollTop = atBottom ? body.scrollHeight : scrollTop;
-      if (s.status === "build_error" && previousStatus !== "build_error") {
-        const build = log
-          .querySelector(".log-build")
-          ?.closest(".ride-log-line");
-        if (build)
-          body.scrollTop +=
-            build.getBoundingClientRect().top -
-            body.getBoundingClientRect().top;
-      }
+      if (revealBuild)
+        el("ride-system-log").open = true;
+    }
+    body.scrollTop = scrollTop;
+    if (revealBuild) {
+      const build = log.querySelector(".log-build")?.closest(".ride-log-line");
+      if (build)
+        body.scrollTop += build.getBoundingClientRect().top - body.getBoundingClientRect().top;
     }
     if (
       revealScore ||
@@ -510,22 +642,44 @@ const RunPage = (() => {
     scheduleScroll();
   }
 
-  el("ride-peek").onclick = () => {
-    if (narrow.matches && !el("ride-sticky").classList.contains("is-detailed"))
-      el("ride-live").scrollIntoView({
-        block: "start",
-        behavior: motion.matches ? "instant" : "smooth",
-      });
-    else
-      window.scrollTo({
-        top:
-          window.scrollY +
-          el("ride-runway").getBoundingClientRect().top +
-          (el("ride-sticky").classList.contains("is-detailed")
-            ? 0
-            : revealDistance),
-        behavior: motion.matches ? "instant" : "smooth",
-      });
+  function showDetails(expand) {
+    focusDetails = expand;
+    window.scrollTo({
+      top: expand && narrow.matches
+        ? window.scrollY + el("ride-live").getBoundingClientRect().top - 16
+        : window.scrollY + el("ride-runway").getBoundingClientRect().top + (expand ? revealDistance : 0),
+      behavior: motion.matches ? "instant" : "smooth",
+    });
+    scheduleScroll();
+  }
+  function toggleDetails() {
+    showDetails(!el("ride-sticky").classList.contains("is-detailed"));
+  }
+  el("ride-view-details").onclick = toggleDetails;
+  el("ride-results").addEventListener("click", () => {
+    if (!narrow.matches && !el("ride-sticky").classList.contains("is-detailed"))
+      showDetails(true);
+  });
+  el("ride-stages").addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-stage]");
+    if (!button) return;
+    filters.stage = button.dataset.stage;
+    applyFilters();
+  });
+  el("ride-case-search").addEventListener("input", (event) => {
+    filters.query = event.target.value;
+    applyFilters();
+  });
+  el("ride-verdict-filter").addEventListener("change", (event) => {
+    filters.verdict = event.target.value;
+    applyFilters();
+  });
+  el("ride-clear-filters").onclick = () => {
+    Object.assign(filters, { stage: "all", verdict: "all", query: "" });
+    el("ride-case-search").value = "";
+    el("ride-verdict-filter").value = "all";
+    applyFilters();
+    el("ride-case-search").focus({ preventScroll: true });
   };
   window.addEventListener("scroll", scheduleScroll, { passive: true });
   window.addEventListener("resize", scheduleScroll, { passive: true });

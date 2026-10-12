@@ -350,20 +350,10 @@
         aria-labelledby="run-name"
       >
         <h1 id="run-name" class="sr-only" tabindex="-1">Loading your run…</h1>
-        <a href="#submissions" id="run-back" class="run-back"
-          >Back to menu <span aria-hidden="true">↗</span></a
-        >
         <p id="run-error" class="notice" role="status" hidden></p>
         <div id="run-content" hidden>
           <div class="ride-runway" id="ride-runway">
             <div class="ride-sticky" id="ride-sticky">
-              <div class="ride-toolbar">
-                <ol
-                  id="ride-stages"
-                  class="ride-stages"
-                  aria-label="Test stages"
-                ></ol>
-              </div>
               <div class="ride-grid">
                 <div class="ride-main">
                   <figure
@@ -374,8 +364,18 @@
                     aria-label="Ferris waiting behind his skateboard for a worker."
                   >
                     <div class="ride-copy" id="ride-copy">
+                      <p class="ride-eyebrow" id="ride-eyebrow">YOUR COMPILER / IN THE QUEUE</p>
                       <h2 id="ride-headline">Ready to roll.</h2>
                       <p id="ride-caption">A little patience. The open road is just ahead.</p>
+                      <button
+                        id="ride-view-details"
+                        class="ride-view-details"
+                        type="button"
+                        aria-controls="ride-live"
+                        aria-expanded="false"
+                      >
+                        <span>View run details</span><span aria-hidden="true">↓</span>
+                      </button>
                     </div>
                     <div
                       id="ride-art"
@@ -384,6 +384,7 @@
                     ></div>
                   </figure>
                   <div class="ride-progress-panel">
+                    <p id="ride-brief" role="status">Waiting for a worker</p>
                     <div
                       id="ride-progress"
                       class="ride-progress"
@@ -395,35 +396,64 @@
                     >
                       <span id="ride-progress-fill"></span>
                     </div>
-                    <div class="ride-progress-label">
-                      <p id="ride-brief" role="status">Waiting for a worker</p>
-                      <strong id="ride-percent">0%</strong>
-                      <div class="ride-details-control">
-                        <span class="ride-details-hint">Scroll down to view details.</span>
-                        <button
-                          id="ride-peek"
-                          class="ride-peek"
-                          aria-label="Show results and system log"
-                          title="Show results and system log"
-                        >
-                          ↓
-                        </button>
-                      </div>
-                    </div>
+                    <strong id="ride-percent">0%</strong>
                   </div>
                 </div>
                 <aside
                   class="ride-live"
                   id="ride-live"
                   aria-labelledby="ride-live-title"
-                  inert
                 >
                   <div class="ride-live-heading">
-                    <div>
-                      <h2 id="ride-live-title">Current run</h2>
+                    <div class="ride-live-title-group">
+                      <svg class="ride-document-icon" width="25" height="29" viewBox="0 0 24 28" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+                        <path d="M4 1h10l7 7v17a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2Z" />
+                        <path d="M14 1v7h7M7 13h9M7 18h9M7 23h6" />
+                      </svg>
+                      <h2 id="ride-live-title" tabindex="-1">Run details</h2>
+                    </div>
+                    <div class="ride-live-meta">
+                      <span id="run-status"></span>
                       <span id="run-meta"></span>
                     </div>
-                    <span id="run-status"></span>
+                    <a href="#submissions" id="run-back" class="run-back">
+                      Back to menu <span aria-hidden="true">↗</span>
+                    </a>
+                  </div>
+                  <div id="ride-filters" class="ride-filters" role="group" aria-label="Filter test results">
+                    <ol id="ride-stages" class="ride-stages" aria-label="Filter by test stage"></ol>
+                    <div class="ride-filter-fields">
+                      <label class="ride-search" for="ride-case-search">
+                        <svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+                          <circle cx="8.5" cy="8.5" r="5.5" />
+                          <path d="m13 13 4 4" />
+                        </svg>
+                        <span class="sr-only">Find a testcase</span>
+                        <input id="ride-case-search" type="search" placeholder="Find a testcase…" autocomplete="off" />
+                      </label>
+                      <label class="sr-only" for="ride-verdict-filter">Result status</label>
+                      <select id="ride-verdict-filter">
+                        <option value="all">All results</option>
+                        <option value="failed">Failed</option>
+                        <option value="passed">Passed</option>
+                      </select>
+                    </div>
+                    <div class="ride-filter-summary">
+                      <p id="ride-result-count" role="status" aria-live="polite"></p>
+                      <button id="ride-clear-filters" type="button" hidden>Clear filters</button>
+                      <div class="ride-run-actions">
+                        <button
+                          id="cancel-submission"
+                          class="button ghost small"
+                          hidden
+                        >
+                          Cancel run
+                        </button>
+                        <button id="void-submission" class="button ghost small" hidden>
+                          Void run
+                        </button>
+                      </div>
+                    </div>
                   </div>
                   <div
                     id="ride-live-body"
@@ -432,25 +462,6 @@
                     role="region"
                     aria-label="Run results and system log"
                   >
-                    <div class="ride-current">
-                      <strong id="ride-current-label"></strong>
-                      <p id="ride-current-case"></p>
-                      <button
-                        id="cancel-submission"
-                        class="button ghost small"
-                        hidden
-                      >
-                      Cancel run
-                      </button>
-                      <button id="void-submission" class="button ghost small" hidden>
-                        Void run
-                      </button>
-                      <p id="run-void-info" class="notice" hidden></p>
-                      <details class="ride-info">
-                        <summary>Run details</summary>
-                        <dl id="run-facts"></dl>
-                      </details>
-                    </div>
                     <section
                       id="run-score"
                       class="ride-score"
@@ -467,8 +478,26 @@
                         <div id="run-score-cases"></div>
                       </details>
                     </section>
-                    <div class="ride-log-heading"><h3>System log</h3></div>
-                    <div id="ride-log" class="ride-log"></div>
+                    <section class="ride-results" aria-label="Testcase results">
+                      <div id="ride-results"></div>
+                      <div id="ride-results-empty" class="ride-results-empty" hidden>
+                        <strong id="ride-empty-title">No results yet</strong>
+                        <p id="ride-empty-description">Test results will appear here as your compiler runs.</p>
+                      </div>
+                    </section>
+                    <div class="ride-current">
+                      <strong id="ride-current-label"></strong>
+                      <p id="ride-current-case"></p>
+                      <p id="run-void-info" class="notice" hidden></p>
+                      <details class="ride-info">
+                        <summary>Submission info</summary>
+                        <dl id="run-facts"></dl>
+                      </details>
+                    </div>
+                    <details id="ride-system-log" class="ride-system-log">
+                      <summary>System log <span>Build output &amp; run events</span></summary>
+                      <div id="ride-log" class="ride-log"></div>
+                    </details>
                   </div>
                 </aside>
               </div>

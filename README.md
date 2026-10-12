@@ -24,9 +24,11 @@ with execution ordered semantic → IR → codegen → optimization:
 IR and codegen share source files and input/output pairs. The catalog derives an IR
 check from each codegen manifest entry; no duplicate fixtures or manifest changes are
 needed. Counts come from the configured manifests; they are not hardcoded into grading.
-There is no per-testcase or directory filter, and the API rejects extra selection fields.
-All selected tests run even if an earlier test fails. A submission is accepted only if
-all tests pass. Per-case diagnostics remain visible for debugging.
+Each submission runs the full selected suite, and the API rejects per-testcase or directory
+selection. The run page lets you filter results by test stage, testcase name, and passed or
+failed status, and expand individual results to read diagnostics. These filters only change
+which results are displayed. All selected tests run even if an earlier test fails, and a
+submission is accepted only if all tests pass.
 
 Official testcases are pinned in this repository's `testcases/official` Git submodule:
 [ACMClassCourse-2025/rx-compiler-testcases](https://github.com/ACMClassCourse-2025/rx-compiler-testcases).
