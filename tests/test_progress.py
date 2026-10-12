@@ -78,6 +78,42 @@ def test_progress_is_owned_by_active_worker_and_survives_catalog_changes(
         assert Database(settings.db_path).get(job_id)["stage_counts"] == counts
 
 
+def test_testcase_output_is_fetched_separately_and_respects_ownership(
+    settings, accounts, sign_in
+):
+    app = create_app(settings)
+    with TestClient(app) as client:
+        sign_in(client, "alice")
+        job = enqueue(client)
+        claimed = app.state.db.claim("worker", 90)
+        case = app.state.catalog.cases[json.loads(claimed["case_ids"])[0]]
+        log = "compiler diagnostic\n" * 5000
+        result = accepted(case)
+        result["message"] = "Visible only on expansion"
+        result["log"] = log
+        app.state.db.record(job["id"], "worker", result)
+
+        path = f"/api/submissions/{job['id']}"
+        response = client.get(path)
+        assert response.status_code == 200
+        assert "log" not in response.json()["results"][0]
+        assert "message" not in response.json()["results"][0]
+        assert log not in response.text
+        assert result["message"] not in response.text
+        output = client.get(f"{path}/result-output", params={"case_id": case.id})
+        assert output.status_code == 200
+        assert output.json() == {"message": result["message"], "log": log}
+        assert client.get(f"{path}/result-output", params={"case_id": "missing"}).status_code == 404
+
+        sign_in(client, "bob")
+        assert client.get(f"{path}/result-output", params={"case_id": case.id}).status_code == 404
+        sign_in(client, "admin")
+        assert client.get(f"{path}/result-output", params={"case_id": case.id}).json() == {
+            "message": result["message"],
+            "log": log
+        }
+
+
 def test_worker_publishes_fetch_build_and_each_current_test(
     settings, accounts, sign_in, monkeypatch
 ):

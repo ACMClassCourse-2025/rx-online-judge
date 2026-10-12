@@ -74,7 +74,11 @@ def test_full_submission_through_api_worker_and_reimu(
         assert result["passed"] == 5 and result["cycles"] > 0
         ir = next(r for r in result["results"] if r["stage"] == "ir")
         assert len(ir["runs"]) == 2 and ir["cycles"] == 0
-        assert "Clang IR lowering:" in ir["log"]
+        assert "log" not in ir
+        output = api.get(
+            f"/api/submissions/{job['id']}/result-output", params={"case_id": ir["case_id"]}
+        ).json()
+        assert "Clang IR lowering:" in output["log"]
         codegen = next(r for r in result["results"] if r["stage"] == "codegen")
         assert len(codegen["runs"]) == 2
         assert not client.containers.list(
@@ -108,7 +112,9 @@ def test_hardening_limits_and_exit_status(settings, client):
         result = box.execute(["sh", "-c", "sleep 100 & wait"], 0.2)
         assert result.limit == "time_limit"
     with Sandbox(client, settings, "rx-oj-python:local", "test-output") as box:
-        assert box.execute(["python3", "-c", "print('x'*10000)"], 5).limit == "output_limit"
+        result = box.execute(["python3", "-c", "print('x'*10000)"], 5)
+        assert result.code == 0 and result.limit is None
+        assert "Output truncated after 1024 bytes" in result.log
     with Sandbox(
         client, settings, "rx-oj-python:local", "test-cancel", cancelled=lambda: True
     ) as box:

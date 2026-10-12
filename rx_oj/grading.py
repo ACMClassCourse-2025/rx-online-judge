@@ -102,6 +102,14 @@ class Judge:
         def fail(verdict, message):
             result.update(verdict=verdict, message=message)
 
+        def append_log(text):
+            if not text or result["log"].endswith("[Further testcase output truncated.]"):
+                return
+            available = max(0, self.settings.max_case_log_bytes - len(result["log"]))
+            result["log"] += text[:available]
+            if len(text) > available:
+                result["log"] += "\n[Further testcase output truncated.]"
+
         try:
             with self.sandbox(environment=build.environment) as sandbox:
                 sandbox.put("/workspace", build.workspace)
@@ -110,6 +118,7 @@ class Judge:
                 execution = sandbox.execute(
                     ["python3", "/opt/rx-oj/command.py", stage],
                     self.timeout(self.settings.compile_timeout),
+                    log_limit=self.settings.max_case_log_bytes,
                 )
                 result["log"] = execution.log
                 if execution.limit:
@@ -129,10 +138,11 @@ class Judge:
                 with self.sandbox(image=self.settings.ir_image) as clang:
                     clang.files("/case", {"program.ll": artifact})
                     execution = clang.execute(
-                        clang_command(), self.timeout(self.settings.compile_timeout)
+                        clang_command(),
+                        self.timeout(self.settings.compile_timeout),
+                        log_limit=self.settings.max_case_log_bytes,
                     )
-                    available = max(0, self.settings.max_log_bytes - len(result["log"]))
-                    result["log"] += ("\nClang IR lowering:\n" + execution.log)[:available]
+                    append_log("\nClang IR lowering:\n" + execution.log)
                     if execution.limit:
                         fail(execution.limit, f"Clang: {execution.limit.replace('_', ' ')}.")
                     elif execution.code:
@@ -173,9 +183,9 @@ class Judge:
                                 "/output/profile",
                             ],
                             self.timeout(self.settings.run_timeout),
+                            log_limit=self.settings.max_case_log_bytes,
                         )
-                        available = max(0, self.settings.max_log_bytes - len(result["log"]))
-                        result["log"] += execution.log[:available]
+                        append_log(execution.log)
                         cycles = 0
                         if execution.limit:
                             fail(execution.limit, f"Execution {index}: {execution.limit}.")

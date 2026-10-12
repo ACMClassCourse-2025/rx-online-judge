@@ -282,13 +282,25 @@ class Database:
                 result["results"] = [
                     dict(r)
                     for r in conn.execute(
-                        "SELECT * FROM results WHERE submission_id=? ORDER BY rowid",
+                        """SELECT case_id, stage, verdict, duration_ms, cycles,
+                        runs FROM results WHERE submission_id=? ORDER BY rowid""",
                         (submission_id,),
                     )
                 ]
                 for case in result["results"]:
                     case["runs"] = json.loads(case["runs"])
             return result
+
+    def result_output(self, submission_id, case_id, owner_id=None):
+        with self.connect() as conn:
+            row = conn.execute(
+                """SELECT results.message, results.log FROM results
+                JOIN submissions ON submissions.id=results.submission_id
+                WHERE results.submission_id=? AND results.case_id=?
+                AND (? IS NULL OR submissions.owner_id=?)""",
+                (submission_id, case_id, owner_id, owner_id),
+            ).fetchone()
+            return dict(row) if row else None
 
     def listing(self, limit=50, offset=0, owner_id=None, *, q="", status="", suite="", language=""):
         conditions = ["(? IS NULL OR owner_id=?)"]

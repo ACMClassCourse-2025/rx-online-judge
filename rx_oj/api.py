@@ -230,6 +230,17 @@ def create_app(settings: Settings | None = None):
         result["optimization_baseline_status"] = baseline_status(baseline, app.state.catalog)
         return result
 
+    @app.get("/api/submissions/{submission_id}/result-output")
+    def result_output(
+        submission_id: str,
+        case_id: Annotated[str, Query(max_length=1024)],
+        user: Authenticated,
+    ):
+        output = app.state.db.result_output(submission_id, case_id, owner_id=visibility(user))
+        if output is None:
+            raise HTTPException(404, "Testcase result not found")
+        return output
+
     @app.post("/api/submissions/{submission_id}/cancel")
     def cancel(submission_id: str, user: Authenticated):
         if app.state.db.get(submission_id, details=False, owner_id=visibility(user)) is None:

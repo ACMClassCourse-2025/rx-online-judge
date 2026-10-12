@@ -33,6 +33,8 @@ const RunPage = (() => {
   let focusDetails = false;
   const filters = { stage: "all", verdict: "all", query: "" };
   const expandedResults = new Set();
+  const outputCache = new Map();
+  const outputRequests = new Map();
   let renderedResults = "";
   const coverDistance = 240;
   const revealDistance = 520;
@@ -183,6 +185,8 @@ const RunPage = (() => {
     focusDetails = false;
     Object.assign(filters, { stage: "all", verdict: "all", query: "" });
     expandedResults.clear();
+    outputCache.clear();
+    outputRequests.clear();
     renderedResults = "";
     el("ride-case-search").value = "";
     el("ride-verdict-filter").value = "all";
@@ -313,6 +317,55 @@ const RunPage = (() => {
       button.setAttribute("aria-label", `${c.title}: ${progress}`);
     }
   }
+  function showResultOutput(caseId) {
+    const row = [...el("ride-results").children].find(
+      (item) => item.dataset.case === caseId && item.open,
+    );
+    if (!row) return;
+    const target = row.querySelector(".ride-result-diagnostics");
+    const cached = outputCache.get(caseId);
+    if (!cached) {
+      target.textContent = "Loading output…";
+      return;
+    }
+    if (cached.error) {
+      target.textContent = `${cached.error} Close and reopen to retry.`;
+      return;
+    }
+    const result = submission.results.find((item) => item.case_id === caseId);
+    const output = [cached.message, cached.log].filter(Boolean).join("\n");
+    const content = document.createElement(output ? "pre" : "p");
+    content.textContent = output ||
+      (result.verdict === "accepted"
+        ? "This testcase passed."
+        : "No diagnostic output for this testcase.");
+    target.replaceChildren(content);
+  }
+  async function loadResultOutput(caseId, retry = false) {
+    if (!submission) return;
+    if (retry && outputCache.get(caseId)?.error) outputCache.delete(caseId);
+    showResultOutput(caseId);
+    if (outputCache.has(caseId) || outputRequests.has(caseId)) return;
+    const submissionId = submission.id;
+    const request = api(
+      `/submissions/${encodeURIComponent(submissionId)}/result-output?case_id=${encodeURIComponent(caseId)}`,
+    );
+    outputRequests.set(caseId, request);
+    try {
+      const data = await request;
+      if (submission?.id === submissionId && expandedResults.has(caseId)) {
+        outputCache.set(caseId, data);
+        showResultOutput(caseId);
+      }
+    } catch (error) {
+      if (submission?.id === submissionId && expandedResults.has(caseId)) {
+        outputCache.set(caseId, { error: error.message });
+        showResultOutput(caseId);
+      }
+    } finally {
+      if (outputRequests.get(caseId) === request) outputRequests.delete(caseId);
+    }
+  }
   function renderResults(s) {
     const list = el("ride-results");
     for (const row of list.children) {
@@ -342,7 +395,6 @@ const RunPage = (() => {
       : `${count}${terminal(s.status) ? "" : " · updating live"}`;
     const html = results.map((r) => {
       const passed = r.verdict === "accepted";
-      const output = [r.message, r.log].filter(Boolean).join("\n");
       const metrics = `${names[r.stage] || label(r.stage)} · ${(r.duration_ms / 1000).toFixed(2)}s${r.stage === "optimization" && passed ? ` · ${number(r.cycles)} cycles` : ""}`;
       return `<details class="ride-result" data-case="${escapeHTML(r.case_id)}" ${expandedResults.has(r.case_id) ? "open" : ""}>
         <summary title="${escapeHTML(r.case_id)}">
@@ -351,7 +403,7 @@ const RunPage = (() => {
           <span class="ride-result-verdict">${escapeHTML(label(r.verdict))}</span>
           <span class="ride-result-arrow" aria-hidden="true">⌄</span>
         </summary>
-        <div class="ride-result-output"><span class="ride-result-metrics">${escapeHTML(metrics)}</span>${output ? `<pre>${escapeHTML(output)}</pre>` : `<p>${passed ? "This testcase passed." : "No diagnostic output for this testcase."}</p>`}</div>
+        <div class="ride-result-output"><span class="ride-result-metrics">${escapeHTML(metrics)}</span><div class="ride-result-diagnostics"></div></div>
       </details>`;
     }).join("");
     if (renderedResults !== html) {
@@ -361,6 +413,8 @@ const RunPage = (() => {
         : null;
       list.innerHTML = html;
       renderedResults = html;
+      for (const row of list.children)
+        if (row.open) loadResultOutput(row.dataset.case);
       if (focused) {
         [...list.children]
           .find((row) => row.dataset.case === focused)
@@ -667,6 +721,18 @@ const RunPage = (() => {
     if (!narrow.matches && !el("ride-sticky").classList.contains("is-detailed"))
       showDetails(true);
   });
+  el("ride-results").addEventListener("toggle", (event) => {
+    const row = event.target;
+    if (!row.matches(".ride-result")) return;
+    if (row.open) {
+      expandedResults.add(row.dataset.case);
+      loadResultOutput(row.dataset.case, true);
+    } else {
+      expandedResults.delete(row.dataset.case);
+      outputCache.delete(row.dataset.case);
+      row.querySelector(".ride-result-diagnostics").replaceChildren();
+    }
+  }, true);
   el("ride-stages").addEventListener("click", (event) => {
     const button = event.target.closest("button[data-stage]");
     if (!button) return;

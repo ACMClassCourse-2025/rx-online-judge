@@ -174,14 +174,16 @@ class Sandbox:
                 raise ArtifactError(f"Artifact exceeds the size limit: {path}")
             return archive.extractfile(members[0]).read(limit + 1)
 
-    def execute(self, command, timeout, capture=0):
+    def execute(self, command, timeout, capture=0, log_limit=None):
         started = time.monotonic()
         exec_id = self.client.api.exec_create(
             self.container.id, command, user="1000:1000", workdir="/workspace"
         )["Id"]
         captured = bytearray()
         data = bytearray()
+        log_limit = self.settings.max_log_bytes if log_limit is None else log_limit
         output_limit = threading.Event()
+        truncated_log = threading.Event()
         finished = threading.Event()
         errors = []
 
@@ -197,11 +199,10 @@ class Sandbox:
                         stdout = None
                     for chunk in (stdout, stderr):
                         if chunk:
-                            remaining = self.settings.max_log_bytes - len(captured)
-                            captured.extend(chunk[: max(0, remaining)])
+                            remaining = max(0, log_limit - len(captured))
+                            captured.extend(chunk[:remaining])
                             if len(chunk) > remaining:
-                                output_limit.set()
-                                return
+                                truncated_log.set()
             except Exception as exc:
                 errors.append(exc)
             finally:
@@ -236,10 +237,13 @@ class Sandbox:
                 limit, code = "time_limit", -1
             else:
                 code = info["ExitCode"]
+        log = captured.decode(errors="replace")
+        if truncated_log.is_set():
+            log += f"\n[Output truncated after {log_limit} bytes.]"
         return Execution(
             code,
             round((time.monotonic() - started) * 1000),
-            captured.decode(errors="replace"),
+            log,
             limit,
             bytes(data),
         )

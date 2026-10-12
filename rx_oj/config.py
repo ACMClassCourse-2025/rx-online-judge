@@ -77,8 +77,9 @@ class Settings:
     max_source_bytes: int = 64 * 1024 * 1024
     max_snapshot_bytes: int = 256 * 1024 * 1024
     max_artifact_bytes: int = 8 * 1024 * 1024
-    max_output_bytes: int = 1024 * 1024
+    max_output_bytes: int = 16 * 1024 * 1024
     max_log_bytes: int = 64 * 1024
+    max_case_log_bytes: int = 8 * 1024 * 1024
     max_pending: int = 100
 
     @property
