@@ -34,6 +34,7 @@ const RunPage = (() => {
   const filters = { stage: "all", verdict: "all", query: "" };
   const expandedResults = new Set();
   let renderedResults = "";
+  const coverDistance = 240;
   const revealDistance = 520;
 
   function mountArt() {
@@ -146,18 +147,22 @@ const RunPage = (() => {
     scrollFrame = 0;
     if (!active) return;
     const top = el("ride-runway").getBoundingClientRect().top;
-    const distance = narrow.matches
-      ? Math.max(1, el("ride-scene").parentElement.offsetHeight - 136)
-      : revealDistance;
-    const amount = Math.min(1, Math.max(0, -top / distance));
-    el("ride-sticky").style.setProperty("--reveal", amount.toFixed(4));
-    el("ride-sticky").classList.toggle("is-detailed", amount > 0.85);
-    const detailed = amount > 0.85;
+    const clamp = (value) => Math.min(1, Math.max(0, value));
+    const cover = narrow.matches ? 0 : clamp(-top / coverDistance);
+    const reveal = narrow.matches
+      ? clamp(-top / Math.max(1, el("ride-scene").parentElement.offsetHeight - 136))
+      : clamp((-top - coverDistance) / revealDistance);
+    const sticky = el("ride-sticky");
+    sticky.style.setProperty("--cover", cover.toFixed(4));
+    sticky.style.setProperty("--reveal", reveal.toFixed(4));
+    sticky.classList.toggle("is-covered", !narrow.matches && cover >= 1);
+    const detailed = narrow.matches ? reveal > 0.85 : reveal > 0.01;
+    sticky.classList.toggle("is-detailed", detailed);
     const action = detailed ? "Back to full scene" : "View run details";
     el("ride-view-details").firstElementChild.textContent = action;
     el("ride-view-details").lastElementChild.textContent = detailed ? "↑" : "↓";
     el("ride-view-details").setAttribute("aria-expanded", String(detailed));
-    if (focusDetails && amount >= 0.99) {
+    if (focusDetails && reveal >= 0.99) {
       focusDetails = false;
       el("ride-live-title").focus({ preventScroll: true });
     }
@@ -647,7 +652,9 @@ const RunPage = (() => {
     window.scrollTo({
       top: expand && narrow.matches
         ? window.scrollY + el("ride-live").getBoundingClientRect().top - 16
-        : window.scrollY + el("ride-runway").getBoundingClientRect().top + (expand ? revealDistance : 0),
+        : window.scrollY +
+          el("ride-runway").getBoundingClientRect().top +
+          (expand ? coverDistance + revealDistance : 0),
       behavior: motion.matches ? "instant" : "smooth",
     });
     scheduleScroll();

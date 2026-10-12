@@ -44,9 +44,11 @@
   margin: 0;
 }
 .ride-runway {
-  height: calc(100svh + 520px);
+  /* Cover the preview over 240px, then reveal the panel over 520px. */
+  height: calc(100svh + 760px);
 }
 .ride-sticky {
+  --cover: 0;
   --reveal: 0;
   --preview-height: 156px;
   position: sticky;
@@ -110,8 +112,10 @@
   overflow: clip;
 }
 .ride-main {
+  position: relative;
+  z-index: 1;
   width: calc(100% - var(--reveal) * 36%);
-  height: calc(100% - (1 - var(--reveal)) * var(--preview-height));
+  height: calc(100% - (1 - var(--cover)) * var(--preview-height));
   min-width: 0;
   min-height: 0;
   display: flex;
@@ -478,16 +482,26 @@
 }
 .ride-live {
   position: absolute;
-  left: calc(var(--reveal) * (64% + 18px));
-  right: calc(var(--reveal) * 24px);
-  top: calc((1 - var(--reveal)) * (100% - var(--preview-height)) + var(--reveal) * 24px);
-  bottom: calc(var(--reveal) * 24px);
+  left: 0;
+  right: 0;
+  top: calc(100% - var(--preview-height));
+  bottom: 0;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   background: var(--run-soft);
+}
+/* The scene covers the preview before the full panel enters from the right. */
+@media (min-width: 801px) {
+  .ride-sticky.is-covered .ride-live {
+    left: calc(64% + 18px);
+    right: 24px;
+    top: 24px;
+    bottom: 24px;
+    transform: translateX(calc((1 - var(--reveal)) * 110%));
+  }
 }
 .ride-live-heading {
   display: flex;
