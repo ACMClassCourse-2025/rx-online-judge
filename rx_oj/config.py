@@ -11,6 +11,7 @@ class Settings:
     tests_dir: Path = field(
         default_factory=lambda: Path(os.getenv("OJ_TESTS_DIR", ROOT / "testcases"))
     )
+    tests_commit_sha: str = field(default_factory=lambda: os.getenv("OJ_TESTS_COMMIT", ""))
     languages_file: Path = field(
         default_factory=lambda: Path(os.getenv("OJ_LANGUAGES_FILE", ROOT / "languages.toml"))
     )

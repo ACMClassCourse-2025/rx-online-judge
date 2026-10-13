@@ -67,6 +67,7 @@ function clearSession() {
   ManagePage.reset();
   if (state.page === "run") RunPage.error("Sign in to view this run.");
   renderSubmissions({ items: [], total: 0 });
+  renderProgress(null);
   renderLeaderboard({ status: "signed_out", items: [] });
   $("access-button").textContent = "Sign in";
   $("submission-fields").disabled = true;
@@ -236,6 +237,18 @@ function renderSubmissions(data) {
     )
     .join("");
 }
+function renderProgress(data) {
+  $("progress-commit").textContent = data
+    ? `Current test commit ${state.catalog?.commit_sha?.slice(0, 12) || "unknown"}. Older passes do not count.`
+    : "Sign in to see your current results.";
+  const stages = ["semantic", "ir", "codegen", "optimization"];
+  $("progress-cards").innerHTML = data
+    ? [...stages.map((stage) => {
+        const id = data.stages[stage];
+        return `<article><span>${escapeHTML(label(stage))}</span><strong class="${id ? "passed" : "unpassed"}">${id ? "Passed" : "Not passed"}</strong>${id ? `<a class="submission-link" href="#run/${escapeHTML(id)}">View run</a>` : ""}</article>`;
+      }), `<article><span>Optimization score</span><strong>${data.score === null ? "—" : scoreText(data.score)}</strong>${data.score_submission_id ? `<a class="submission-link" href="#run/${escapeHTML(data.score_submission_id)}">View score</a>` : ""}</article>`].join("")
+    : "";
+}
 function renderDetail(s) {
   $("run-error").hidden = true;
   const key = JSON.stringify(s);
@@ -268,7 +281,7 @@ async function refresh() {
   const revision = state.revision;
   const selected = state.selected;
   try {
-    const [submissions, health, detail, rankings] = await Promise.all([
+    const [submissions, health, detail, rankings, progress] = await Promise.all([
       api(`/submissions?limit=10&offset=${state.offset}`),
       api("/health"),
       selected
@@ -279,10 +292,12 @@ async function refresh() {
           })
         : null,
       state.page === "leaderboard" ? api("/leaderboard") : null,
+      api("/progress"),
     ]);
     if (epoch !== state.epoch || revision !== state.revision || !state.user)
       return;
     renderSubmissions(submissions);
+    renderProgress(progress);
     if (rankings) renderLeaderboard(rankings);
     $("worker-status").textContent = health.workers.length
       ? `${health.workers.length} worker${health.workers.length === 1 ? "" : "s"} connected`
@@ -309,6 +324,7 @@ function renderMetrics(catalog) {
   for (const stage of ["semantic", "ir", "codegen", "optimization"])
     $(`metric-${stage}`).textContent = number(catalog.stages[stage] || 0);
   $("metric-total").textContent = number(catalog.total);
+  $("submit-test-commit").textContent = catalog.commit_sha || "Not available";
 }
 async function loadMetrics() {
   try {

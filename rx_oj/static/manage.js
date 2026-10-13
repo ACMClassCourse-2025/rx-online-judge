@@ -10,6 +10,7 @@ const ManagePage = (() => {
   let voidRun = null;
   let voidBusy = false;
   let actionError = "";
+  let batchBusy = false;
   const pending = new Set();
 
   function error(message = "") {
@@ -51,6 +52,7 @@ const ManagePage = (() => {
     el("void-dialog").close();
     el("manage-search").reset();
     el("manage-body").replaceChildren();
+    el("manage-progress-body").replaceChildren();
     el("manage-count").textContent = "0";
     el("manage-pagination").textContent = "";
     error();
@@ -80,13 +82,28 @@ const ManagePage = (() => {
         <td>${escapeHTML(label(s.suite || s.stage))}<span class="sub-meta">${escapeHTML(languageName(s.language))}</span></td>
         <td>${badge(s.status)}${s.cancel_requested && !terminal(s.status) ? '<span class="sub-meta">Cancelling…</span>' : ""}${s.status_before_void ? `<span class="sub-meta">Was ${escapeHTML(label(s.status_before_void))}</span>` : ""}</td>
         <td>${number(s.passed)}<span class="sub-meta">/ ${number(s.total)} tests</span></td>
+        <td><span class="sub-meta" title="${escapeHTML(s.tests_commit_sha || "Not recorded")}">${escapeHTML(s.tests_commit_sha ? s.tests_commit_sha.slice(0, 12) : "Unknown")}</span>${state.catalog && (s.catalog_version !== state.catalog.version || s.tests_commit_sha !== state.catalog.commit_sha) ? '<span class="sub-meta">Outdated</span>' : ""}</td>
         <td><div class="manage-actions">
           <a class="button ghost small" href="#run/${id}" data-inspect="${id}" aria-label="Inspect ${escapeHTML(s.name)}">Inspect</a>
+          ${terminal(s.status) && s.status !== "voided" && ["semantic", "ir", "codegen", "optimization"].includes(s.stage) && /^[0-9a-f]{40}$/i.test(s.commit_sha) ? `<button class="button ghost small" data-rejudge="${id}" ${busy ? "disabled" : ""}>Rejudge</button>` : ""}
           ${!terminal(s.status) ? `<button class="button ghost small" data-cancel="${id}" ${busy || s.cancel_requested ? "disabled" : ""}>Cancel</button>` : ""}
           ${s.status !== "voided" ? `<button class="button ghost small" data-void="${id}" ${busy ? "disabled" : ""}>Void</button>` : ""}
         </div></td></tr>`;
       })
       .join("");
+  }
+  function renderProgress(data) {
+    const rows = data.items.filter((item) => !item.is_admin);
+    el("manage-progress-commit").textContent =
+      `Current test commit ${state.catalog?.commit_sha?.slice(0, 12) || "unknown"}. Older passes do not count.`;
+    el("manage-progress-body").innerHTML = rows.map((item) => {
+      const status = ["semantic", "ir", "codegen", "optimization"]
+        .map((stage) => item.stages[stage]
+          ? `<td><a class="passed" href="#run/${escapeHTML(item.stages[stage])}" data-inspect="${escapeHTML(item.stages[stage])}">Passed</a></td>`
+          : '<td><span class="unpassed">—</span></td>')
+        .join("");
+      return `<tr><td><strong>${escapeHTML(item.username)}</strong>${item.active ? "" : '<span class="sub-meta">Disabled</span>'}</td>${status}<td>${item.score === null ? "—" : scoreText(item.score)}</td></tr>`;
+    }).join("");
   }
   async function load() {
     if (!state.user?.is_admin || state.page !== "manage") return;
@@ -99,7 +116,9 @@ const ManagePage = (() => {
         limit: pageSize,
         offset,
       });
-      const data = await api(`/admin/submissions?${query}`);
+      const [data, progress] = await Promise.all([
+        api(`/admin/submissions?${query}`), api("/admin/progress"),
+      ]);
       if (current !== request || epoch !== state.epoch || !state.user?.is_admin)
         return;
       if (offset && offset >= data.total) {
@@ -110,6 +129,7 @@ const ManagePage = (() => {
         return load();
       }
       render(data);
+      renderProgress(progress);
       error(actionError);
     } catch (e) {
       if (current === request && epoch === state.epoch) error(e.message);
@@ -152,6 +172,46 @@ const ManagePage = (() => {
       }
     }
   }
+  async function rejudge(id, button) {
+    if (pending.has(id)) return;
+    const epoch = state.epoch;
+    pending.add(id);
+    button.disabled = true;
+    actionError = "";
+    try {
+      const result = await api(`/admin/submissions/${id}/rejudge`, { method: "POST" });
+      if (epoch !== state.epoch) return;
+      state.revision++;
+      actionError = `Queued rejudge ${result.id.slice(0, 12)}.`;
+      await load();
+    } catch (e) {
+      if (epoch === state.epoch) error(e.message);
+    } finally {
+      pending.delete(id);
+      button.disabled = false;
+    }
+  }
+  el("manage-rejudge-latest").onclick = async () => {
+    if (batchBusy || !state.user?.is_admin) return;
+    const epoch = state.epoch;
+    batchBusy = true;
+    const button = el("manage-rejudge-latest");
+    button.disabled = true;
+    button.textContent = "Queuing…";
+    try {
+      const result = await api("/admin/rejudge-latest", { method: "POST" });
+      if (epoch !== state.epoch) return;
+      state.revision++;
+      actionError = `Queued ${result.queued.length} rejudges.${result.skipped_missing_commit.length ? ` ${result.skipped_missing_commit.length} older runs had no source commit.` : ""}`;
+      await load();
+    } catch (e) {
+      if (epoch === state.epoch) error(e.message);
+    } finally {
+      batchBusy = false;
+      button.disabled = false;
+      button.textContent = "Rejudge each student's latest pass";
+    }
+  };
   el("manage-search").onsubmit = (event) => {
     event.preventDefault();
     actionError = "";
@@ -185,9 +245,18 @@ const ManagePage = (() => {
     }
     const cancelButton = event.target.closest("[data-cancel]");
     if (cancelButton) cancel(cancelButton.dataset.cancel, cancelButton);
+    const rejudgeButton = event.target.closest("[data-rejudge]");
+    if (rejudgeButton) rejudge(rejudgeButton.dataset.rejudge, rejudgeButton);
     const voidButton = event.target.closest("[data-void]");
     const s = rows.find((s) => s.id === voidButton?.dataset.void);
     if (s) confirmVoid(s);
+  };
+  el("manage-progress-body").onclick = (event) => {
+    const inspect = event.target.closest("[data-inspect]");
+    if (inspect && !event.ctrlKey && !event.metaKey && !event.shiftKey) {
+      event.preventDefault();
+      openSubmission(inspect.dataset.inspect, "manage");
+    }
   };
   el("void-close").onclick = () => el("void-dialog").close();
   el("void-dialog").addEventListener("cancel", (event) => {

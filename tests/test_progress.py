@@ -78,9 +78,7 @@ def test_progress_is_owned_by_active_worker_and_survives_catalog_changes(
         assert Database(settings.db_path).get(job_id)["stage_counts"] == counts
 
 
-def test_testcase_output_is_fetched_separately_and_respects_ownership(
-    settings, accounts, sign_in
-):
+def test_testcase_output_is_fetched_separately_and_respects_ownership(settings, accounts, sign_in):
     app = create_app(settings)
     with TestClient(app) as client:
         sign_in(client, "alice")
@@ -110,7 +108,7 @@ def test_testcase_output_is_fetched_separately_and_respects_ownership(
         sign_in(client, "admin")
         assert client.get(f"{path}/result-output", params={"case_id": case.id}).json() == {
             "message": result["message"],
-            "log": log
+            "log": log,
         }
 
 

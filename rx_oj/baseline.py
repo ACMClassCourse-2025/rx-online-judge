@@ -81,7 +81,7 @@ def choose_baselines(catalog, variants):
 
 
 def generate_baseline(settings, reference, client, report=print):
-    catalog = Catalog(settings.tests_dir)
+    catalog = Catalog(settings.tests_dir, settings.tests_commit_sha)
     files = reference_files(reference.resolve())
     source_digest = hashlib.sha256()
     for name, content in sorted(files.items()):
@@ -120,6 +120,7 @@ def generate_baseline(settings, reference, client, report=print):
         baseline = {
             "schema_version": 1,
             "catalog_version": catalog.version,
+            "tests_commit_sha": catalog.commit_sha,
             "created_at": time.time(),
             "compiler": compiler,
             "compiler_image": image,
@@ -131,7 +132,7 @@ def generate_baseline(settings, reference, client, report=print):
             "variants": variants,
         }
         # Do not publish results if the fixtures changed while measurements were running.
-        validate_baseline(baseline, Catalog(settings.tests_dir))
+        validate_baseline(baseline, Catalog(settings.tests_dir, settings.tests_commit_sha))
         baseline["id"] = hashlib.sha256(json.dumps(baseline, sort_keys=True).encode()).hexdigest()
         return baseline
     finally:

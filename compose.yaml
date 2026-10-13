@@ -13,6 +13,7 @@ services:
       OJ_SECURE_COOKIES: ${OJ_SECURE_COOKIES:-0}
       FORWARDED_ALLOW_IPS: ${OJ_FORWARDED_ALLOW_IPS:-127.0.0.1}
       OJ_GIT_HOSTS: ${OJ_GIT_HOSTS:-github.com,gitlab.com,codeberg.org,gitee.com}
+      OJ_TESTS_COMMIT: ${RX_TESTS_COMMIT:-}
     volumes:
       - judge-data:/data
       - ${RX_TESTS_PATH:-./testcases}:/tests:ro
@@ -35,6 +36,7 @@ services:
       OJ_DOCKER_RUNTIME: ${OJ_DOCKER_RUNTIME:-}
       OJ_IR_IMAGE: ${OJ_IR_IMAGE:-rx-oj-clang:local}
       OJ_GIT_HOSTS: ${OJ_GIT_HOSTS:-github.com,gitlab.com,codeberg.org,gitee.com}
+      OJ_TESTS_COMMIT: ${RX_TESTS_COMMIT:-}
       OJ_GIT_PROXY: ${OJ_GIT_PROXY:-}
       OJ_DEPENDENCY_PROXY: ${OJ_DEPENDENCY_PROXY:-${OJ_GIT_PROXY:-}}
       OJ_DEPENDENCY_HOSTS: ${OJ_DEPENDENCY_HOSTS:-index.crates.io,static.crates.io,crates.io,pypi.org,files.pythonhosted.org,registry.npmjs.org,repo.maven.apache.org,repo1.maven.org}

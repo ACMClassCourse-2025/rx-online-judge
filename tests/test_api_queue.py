@@ -28,6 +28,7 @@ def test_catalog_summary_is_public_before_and_after_logout(settings, accounts, s
     expected = {
         "total": 5,
         "stages": {"semantic": 2, "ir": 1, "codegen": 1, "optimization": 1},
+        "commit_sha": "",
     }
     with TestClient(create_app(settings)) as client:
         response = client.get("/api/catalog/summary")

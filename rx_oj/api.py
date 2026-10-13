@@ -49,7 +49,7 @@ def create_app(settings: Settings | None = None):
     async def lifespan(app):
         settings.uploads_dir.mkdir(parents=True, exist_ok=True)
         app.state.db = Database(settings.db_path)
-        app.state.catalog = Catalog(settings.tests_dir)
+        app.state.catalog = Catalog(settings.tests_dir, settings.tests_commit_sha)
         app.state.languages = load_languages(settings.languages_file)
         yield
 
@@ -173,7 +173,11 @@ def create_app(settings: Settings | None = None):
     @app.get("/api/catalog/summary")
     def catalog_summary():
         catalog = app.state.catalog.public()
-        return {"total": catalog["total"], "stages": catalog["stages"]}
+        return {
+            "total": catalog["total"],
+            "stages": catalog["stages"],
+            "commit_sha": catalog["commit_sha"],
+        }
 
     @app.get("/api/languages")
     def languages(user: Authenticated):
@@ -193,6 +197,18 @@ def create_app(settings: Settings | None = None):
     @app.get("/api/leaderboard")
     def rankings(user: Authenticated):
         return leaderboard(app.state.db, app.state.catalog, user)
+
+    @app.get("/api/progress")
+    def progress(user: Authenticated):
+        from .scoring import student_progress
+
+        return student_progress(app.state.db, app.state.catalog, user["id"])[0]
+
+    @app.get("/api/admin/progress")
+    def manage_progress(user: Administrator):
+        from .scoring import student_progress
+
+        return {"items": student_progress(app.state.db, app.state.catalog)}
 
     @app.get("/api/admin/submissions")
     def manage_submissions(
@@ -255,6 +271,32 @@ def create_app(settings: Settings | None = None):
         app.state.db.void(submission_id, user["id"])
         return submission(submission_id, user)
 
+    @app.post("/api/admin/submissions/{submission_id}/rejudge", status_code=202)
+    def rejudge_submission(submission_id: str, user: Administrator):
+        catalog = app.state.catalog
+        try:
+            new_id = app.state.db.rejudge(
+                submission_id,
+                catalog,
+                settings.max_pending,
+            )
+        except (ValueError, QueueFull) as exc:
+            raise HTTPException(409 if isinstance(exc, ValueError) else 429, str(exc)) from exc
+        if new_id is None:
+            raise HTTPException(404, "Submission not found")
+        return submission(new_id, user)
+
+    @app.post("/api/admin/rejudge-latest", status_code=202)
+    def rejudge_latest(user: Administrator):
+        catalog = app.state.catalog
+        try:
+            return app.state.db.rejudge_latest(
+                catalog,
+                settings.max_pending,
+            )
+        except QueueFull as exc:
+            raise HTTPException(429, str(exc)) from exc
+
     @app.post("/api/submissions", status_code=202)
     def submit(body: Submission, user: Authenticated):
         if body.language not in app.state.languages:
@@ -276,6 +318,7 @@ def create_app(settings: Settings | None = None):
                     "stage": body.suite,
                     "filter": "",
                     "catalog_version": app.state.catalog.version,
+                    "tests_commit_sha": app.state.catalog.commit_sha,
                     "case_ids": json.dumps([case.id for case in cases]),
                     "created_at": time.time(),
                     "total": len(cases),

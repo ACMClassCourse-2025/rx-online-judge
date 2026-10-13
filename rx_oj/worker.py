@@ -35,7 +35,10 @@ def process(db, client, settings, catalog, languages, job, worker_id, stopping):
         return was_cancelled
 
     try:
-        if job["catalog_version"] != catalog.version:
+        if (
+            job["catalog_version"] != catalog.version
+            or job["tests_commit_sha"] != catalog.commit_sha
+        ):
             raise ValueError(
                 "Test suite changed since submission. Submit again against the new suite."
             )
@@ -123,7 +126,7 @@ def process(db, client, settings, catalog, languages, job, worker_id, stopping):
 
 def run_worker(settings, once=False):
     db = Database(settings.db_path)
-    catalog = Catalog(settings.tests_dir)
+    catalog = Catalog(settings.tests_dir, settings.tests_commit_sha)
     languages = load_languages(settings.languages_file)
     client = docker.from_env(timeout=30)
     client.ping()

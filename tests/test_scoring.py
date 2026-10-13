@@ -107,6 +107,17 @@ def test_geometric_mean_weights_testcases_equally(scoring_setup):
     ] == pytest.approx(10**-7)
 
 
+def test_same_catalog_content_from_older_test_commit_does_not_score(scoring_setup):
+    _, catalog, baseline = scoring_setup
+    catalog.commit_sha = "b" * 40
+    baseline["tests_commit_sha"] = catalog.commit_sha
+    old = submission(catalog)
+    old["tests_commit_sha"] = "a" * 40
+    assert score_submission(old, baseline, catalog) is None
+    old["tests_commit_sha"] = catalog.commit_sha
+    assert score_submission(old, baseline, catalog) is not None
+
+
 @pytest.mark.parametrize(
     "cycles,ratios,expected", [((30, 150), [4, 2], 8**0.5), ((240, 600), [0.5, 0.5], 0.5)]
 )

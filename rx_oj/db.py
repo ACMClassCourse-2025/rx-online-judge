@@ -1,4 +1,5 @@
 import json
+import re
 import sqlite3
 import time
 import uuid
@@ -93,10 +94,13 @@ class Database:
                 "voided_at": "REAL",
                 "voided_by": "TEXT REFERENCES users(id)",
                 "status_before_void": "TEXT",
+                "tests_commit_sha": "TEXT NOT NULL DEFAULT ''",
+                "rejudge_of": "TEXT REFERENCES submissions(id)",
             }.items():
                 if name not in columns:
                     conn.execute(f"ALTER TABLE submissions ADD COLUMN {name} {definition}")
             conn.execute("CREATE INDEX IF NOT EXISTS submission_owner ON submissions(owner_id)")
+            conn.execute("CREATE INDEX IF NOT EXISTS submission_rejudge ON submissions(rejudge_of)")
 
     def create_user(self, username, encoded_password, is_admin=False):
         user_id = uuid.uuid4().hex
@@ -204,11 +208,122 @@ class Database:
             conn.execute(
                 """INSERT INTO submissions
                 (id, name, language, stage, filter, catalog_version, case_ids, created_at, total,
-                 owner_id, repository_url, git_ref)
+                 owner_id, repository_url, git_ref, tests_commit_sha, rejudge_of)
                 VALUES (:id, :name, :language, :stage, :filter, :catalog_version,
-                        :case_ids, :created_at, :total, :owner_id, :repository_url, :git_ref)""",
-                {"owner_id": None, "repository_url": "", "git_ref": "HEAD", **submission},
+                        :case_ids, :created_at, :total, :owner_id, :repository_url, :git_ref,
+                        :tests_commit_sha, :rejudge_of)""",
+                {
+                    "owner_id": None,
+                    "repository_url": "",
+                    "git_ref": "HEAD",
+                    "tests_commit_sha": "",
+                    "rejudge_of": None,
+                    **submission,
+                },
             )
+
+    @staticmethod
+    def _rejudge_fields(source, catalog):
+        if source["status"] in ("queued", "running", "voided"):
+            raise ValueError("Only completed, non-voided runs can be rejudged")
+        if not re.fullmatch(r"[0-9a-fA-F]{40}", source["commit_sha"]):
+            raise ValueError("This run has no resolved source commit to rejudge")
+        cases = catalog.select_suite(source["stage"])
+        new_id = uuid.uuid4().hex
+        return {
+            "id": new_id,
+            "name": f"Rejudge: {source['name']}"[:80],
+            "language": source["language"],
+            "stage": source["stage"],
+            "filter": "",
+            "catalog_version": catalog.version,
+            "tests_commit_sha": catalog.commit_sha,
+            "case_ids": json.dumps([case.id for case in cases]),
+            "created_at": time.time(),
+            "total": len(cases),
+            "owner_id": source["owner_id"],
+            "repository_url": source["repository_url"],
+            "git_ref": source["commit_sha"],
+            "rejudge_of": source["id"],
+        }
+
+    @staticmethod
+    def _insert_rejudge(conn, fields):
+        conn.execute(
+            """INSERT INTO submissions
+            (id, name, language, stage, filter, catalog_version, tests_commit_sha,
+             case_ids, created_at, total, owner_id, repository_url, git_ref, rejudge_of)
+            VALUES (:id, :name, :language, :stage, :filter, :catalog_version,
+                    :tests_commit_sha, :case_ids, :created_at, :total, :owner_id,
+                    :repository_url, :git_ref, :rejudge_of)""",
+            fields,
+        )
+
+    def rejudge(self, submission_id, catalog, max_pending):
+        with self.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            source = conn.execute(
+                "SELECT * FROM submissions WHERE id=?", (submission_id,)
+            ).fetchone()
+            if source is None:
+                return None
+            fields = self._rejudge_fields(source, catalog)
+            count = conn.execute(
+                "SELECT count(*) FROM submissions WHERE status IN ('queued','running')"
+            ).fetchone()[0]
+            if count >= max_pending:
+                raise QueueFull("The judge queue is full; try again after jobs finish")
+            self._insert_rejudge(conn, fields)
+            return fields["id"]
+
+    def rejudge_latest(self, catalog, max_pending):
+        with self.connect() as conn:
+            conn.execute("BEGIN IMMEDIATE")
+            rows = conn.execute(
+                """SELECT s.* FROM submissions s JOIN users u ON u.id=s.owner_id
+                WHERE u.is_admin=0 AND s.status='accepted'
+                AND s.completed=s.total AND s.passed=s.total
+                AND s.stage IN ('semantic','ir','codegen','optimization')
+                ORDER BY s.owner_id, s.finished_at DESC, s.created_at DESC, s.id DESC"""
+            ).fetchall()
+            latest = {}
+            for row in rows:
+                latest.setdefault(row["owner_id"], row)
+            pending = conn.execute(
+                """SELECT s.owner_id FROM submissions s
+                WHERE s.status IN ('queued','running') AND s.rejudge_of IS NOT NULL
+                AND s.catalog_version=? AND s.tests_commit_sha=?""",
+                (catalog.version, catalog.commit_sha),
+            ).fetchall()
+            pending_owners = {row["owner_id"] for row in pending}
+            fields = []
+            skipped_missing_commit = []
+            for owner_id, source in latest.items():
+                if (
+                    source["catalog_version"] == catalog.version
+                    and source["tests_commit_sha"] == catalog.commit_sha
+                ):
+                    continue
+                if owner_id in pending_owners:
+                    continue
+                try:
+                    fields.append(self._rejudge_fields(source, catalog))
+                except ValueError:
+                    skipped_missing_commit.append(source["id"])
+            count = conn.execute(
+                "SELECT count(*) FROM submissions WHERE status IN ('queued','running')"
+            ).fetchone()[0]
+            if count + len(fields) > max_pending:
+                raise QueueFull(
+                    f"Need {len(fields)} queue slots for this batch; "
+                    f"{max_pending - count} available"
+                )
+            for item in fields:
+                self._insert_rejudge(conn, item)
+            return {
+                "queued": [item["id"] for item in fields],
+                "skipped_missing_commit": skipped_missing_commit,
+            }
 
     def claim(self, worker_id, lease_seconds):
         with self.connect() as conn:
@@ -331,6 +446,7 @@ class Database:
                 f"""SELECT s.id, name, language, stage, stage AS suite, filter, status,
                 s.created_at, started_at, finished_at, total, completed, passed,
                 cycles, message, s.repository_url, s.git_ref, s.commit_sha,
+                s.catalog_version, s.tests_commit_sha, s.rejudge_of,
                 u.username AS owner,
                 cancel_requested, voided_at, status_before_void
                 {source} WHERE {where}
@@ -477,18 +593,24 @@ class Database:
             ).fetchone()
             return json.loads(row["payload"]) if row else None
 
-    def leaderboard_candidates(self, catalog_version):
+    def leaderboard_candidates(
+        self, catalog_version, tests_commit_sha="", owner_id=None, active_only=True
+    ):
         with self.connect() as conn:
             rows = conn.execute(
                 """SELECT s.id, s.owner_id, u.username, s.name, s.language, s.stage, s.status,
-                s.catalog_version, s.total, s.completed, s.passed, s.finished_at,
+                s.catalog_version, s.tests_commit_sha, s.total, s.completed, s.passed,
+                s.finished_at,
                 r.case_id, r.stage AS case_stage, r.verdict, r.cycles
                 FROM submissions s JOIN users u ON u.id=s.owner_id
                 JOIN results r ON r.submission_id=s.id
-                WHERE u.active=1 AND s.status='accepted' AND s.stage='optimization'
-                AND s.catalog_version=? AND s.completed=s.total AND s.passed=s.total
+                WHERE (?=0 OR u.active=1) AND s.status='accepted'
+                AND s.stage='optimization'
+                AND s.catalog_version=? AND s.tests_commit_sha=?
+                AND (? IS NULL OR s.owner_id=?)
+                AND s.completed=s.total AND s.passed=s.total
                 ORDER BY s.finished_at, s.id, r.rowid""",
-                (catalog_version,),
+                (int(active_only), catalog_version, tests_commit_sha, owner_id, owner_id),
             ).fetchall()
         candidates = {}
         for row in rows:
@@ -501,3 +623,27 @@ class Database:
             }
             candidates.setdefault(item["id"], {**item, "results": []})["results"].append(result)
         return list(candidates.values())
+
+    def progress_rows(self, catalog_version, tests_commit_sha, owner_id=None):
+        with self.connect() as conn:
+            conn.execute("BEGIN")
+            users = [
+                dict(row)
+                for row in conn.execute(
+                    """SELECT id, username, is_admin, active FROM users
+                    WHERE (? IS NULL OR id=?) ORDER BY username""",
+                    (owner_id, owner_id),
+                )
+            ]
+            runs = [
+                dict(row)
+                for row in conn.execute(
+                    """SELECT id, owner_id, stage, total, completed, passed, finished_at
+                FROM submissions WHERE status='accepted' AND catalog_version=?
+                AND tests_commit_sha=? AND owner_id IS NOT NULL
+                AND (? IS NULL OR owner_id=?)
+                ORDER BY finished_at DESC, created_at DESC, id DESC""",
+                    (catalog_version, tests_commit_sha, owner_id, owner_id),
+                )
+            ]
+        return users, runs

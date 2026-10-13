@@ -1,5 +1,6 @@
 import socket
 import stat
+import subprocess
 
 import pytest
 
@@ -31,6 +32,32 @@ def test_create_configuration_with_socket_group(tmp_path, docker_socket):
     assert stat.S_IMODE(env.stat().st_mode) == 0o600
     configure(tmp_path, require_docker=True)
     assert env.read_text() == content
+
+
+def test_setup_records_test_repository_commit(tmp_path, docker_socket):
+    official = tmp_path / "testcases" / "official"
+    official.mkdir(parents=True)
+    subprocess.run(["git", "init", "-q", str(official)], check=True)
+    (official / "manifest.json").write_text("[]")
+    subprocess.run(["git", "-C", str(official), "add", "manifest.json"], check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(official),
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=test@example.org",
+            "commit",
+            "-qm",
+            "test",
+        ],
+        check=True,
+    )
+    sha = subprocess.check_output(["git", "-C", str(official), "rev-parse", "HEAD"], text=True)
+    configure(tmp_path, require_docker=True)
+    assert f"RX_TESTS_COMMIT={sha.strip()}\n" in (tmp_path / ".env").read_text()
 
 
 def test_refresh_stale_group_and_preserve_settings(tmp_path, docker_socket, monkeypatch):

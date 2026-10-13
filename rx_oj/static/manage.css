@@ -19,6 +19,41 @@
 .manage-content {
   padding-block: 32px 64px;
 }
+.progress-section {
+  padding-block: 30px 8px;
+}
+.submit-test-commit {
+  margin-top: 18px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.submit-test-commit code {
+  display: block;
+  margin-top: 5px;
+  font-family: var(--mono);
+}
+.progress-cards {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+.progress-cards article {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  background: #fff;
+}
+.progress-cards strong, .progress-cards span {
+  display: block;
+}
+.progress-cards strong { margin-top: 8px; font-size: 20px; }
+.progress-cards .passed { color: var(--green); }
+.progress-cards .unpassed { color: var(--muted); }
+.manage-progress-table { min-width: 700px; }
+.manage-progress-table td { vertical-align: middle; }
+.manage-progress-table .passed { color: var(--green); font-weight: 700; }
+.manage-progress-table .unpassed { color: var(--muted); }
+.manage-content .manage-filters { margin-top: 32px; }
 .manage-filters {
   display: grid;
   grid-template-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr));
@@ -90,6 +125,7 @@
   overflow-wrap: anywhere;
 }
 @media (max-width: 760px) {
+  .progress-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .manage-filters {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

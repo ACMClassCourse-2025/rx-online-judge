@@ -209,6 +209,15 @@
             </div>
           </div>
         </section>
+        <section class="wrap progress-section" aria-labelledby="progress-title">
+          <div class="panel-heading">
+            <div>
+              <h2 id="progress-title" class="underlined">Your current progress</h2>
+              <p id="progress-commit" class="sub-meta">Sign in to see your current results.</p>
+            </div>
+          </div>
+          <div id="progress-cards" class="progress-cards" aria-live="polite"></div>
+        </section>
         <div class="workspace wrap">
           <div class="main-grid">
             <section
@@ -339,6 +348,10 @@
                   Sign in to submit <span aria-hidden="true">→</span>
                 </button>
               </form>
+              <p class="submit-test-commit">
+                Current test suite commit
+                <code id="submit-test-commit">Loading…</code>
+              </p>
               <div class="connection" role="status">
                 <span class="status-dot" id="status-dot" aria-hidden="true"></span
                 ><span id="worker-status">Sign in to connect</span>
@@ -593,6 +606,21 @@
             Sign in as an administrator to manage runs.
           </p>
           <div id="manage-tools" hidden>
+            <div class="panel-heading">
+              <div>
+                <h2 class="underlined">Student progress</h2>
+                <p id="manage-progress-commit">Only passes on the current test commit count.</p>
+              </div>
+              <button id="manage-rejudge-latest" class="button primary" type="button">
+                Rejudge each student's latest pass
+              </button>
+            </div>
+            <div class="table-scroll" tabindex="0" role="region" aria-label="Student progress">
+              <table class="manage-progress-table">
+                <thead><tr><th scope="col">Student</th><th scope="col">Semantic</th><th scope="col">IR</th><th scope="col">Codegen</th><th scope="col">Optimization</th><th scope="col">Score</th></tr></thead>
+                <tbody id="manage-progress-body"></tbody>
+              </table>
+            </div>
             <form id="manage-search" class="manage-filters" role="search">
               <div class="manage-query">
                 <label for="manage-query">Search runs</label>
@@ -676,6 +704,7 @@
                     <th scope="col">Suite / language</th>
                     <th scope="col">Status</th>
                     <th scope="col">Passed</th>
+                    <th scope="col">Test commit</th>
                     <th scope="col">Actions</th>
                   </tr>
                 </thead>

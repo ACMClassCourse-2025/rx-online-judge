@@ -5,13 +5,19 @@ import argparse
 import os
 import shlex
 import stat
+import subprocess
 from pathlib import Path
 
 
 def assignment(line):
     key, separator, value = line.partition("=")
     key = key.strip().removeprefix("export ").strip()
-    if not separator or key not in {"OJ_DOCKER_SOCKET", "OJ_DOCKER_GID", "RX_TESTS_PATH"}:
+    if not separator or key not in {
+        "OJ_DOCKER_SOCKET",
+        "OJ_DOCKER_GID",
+        "RX_TESTS_PATH",
+        "RX_TESTS_COMMIT",
+    }:
         return None, None
     return key, " ".join(shlex.split(value, comments=True))
 
@@ -56,6 +62,30 @@ def configure(root, *, require_docker=False):
         )
     elif settings.get("RX_TESTS_PATH") == "../rx-compiler/tests":
         updates["RX_TESTS_PATH"] = "./testcases"
+
+    tests_path = Path(
+        os.getenv("RX_TESTS_PATH")
+        or updates.get("RX_TESTS_PATH")
+        or settings.get("RX_TESTS_PATH")
+        or "./testcases"
+    )
+    tests_path = tests_path if tests_path.is_absolute() else root / tests_path
+    commit = ""
+    for candidate in (tests_path / "official", tests_path):
+        if not (candidate / ".git").exists():
+            continue
+        result = subprocess.run(
+            ["git", "-C", str(candidate), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=5,
+        )
+        if result.returncode == 0:
+            commit = result.stdout.strip()
+            break
+    if commit or "RX_TESTS_COMMIT" in settings:
+        updates["RX_TESTS_COMMIT"] = commit
 
     seen = set()
     for index, line in enumerate(lines):

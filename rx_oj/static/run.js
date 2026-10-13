@@ -482,7 +482,8 @@ const RunPage = (() => {
       if (
         s.catalog_version &&
         state.catalog?.version &&
-        s.catalog_version !== state.catalog.version
+        (s.catalog_version !== state.catalog.version ||
+          s.tests_commit_sha !== state.catalog.commit_sha)
       ) {
         description =
           "This run uses an older test catalog. Submit it again to earn a score.";
@@ -543,6 +544,8 @@ const RunPage = (() => {
       ["Repository", s.repository_url],
       ["Ref", s.git_ref],
       ["Commit", s.commit_sha || "Not resolved"],
+      ["Test commit", s.tests_commit_sha || "Not recorded"],
+      ...(s.rejudge_of ? [["Rejudge of", s.rejudge_of]] : []),
       ["Submitted", date(s.created_at)],
     ];
     el("run-facts").innerHTML = facts

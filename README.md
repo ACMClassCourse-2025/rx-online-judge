@@ -41,14 +41,16 @@ To update to a newer official testcase revision:
 
 ```sh
 git submodule update --remote testcases/official
-git add testcases/official
-git commit -m "Update official testcases"
-docker compose restart api worker
+make up
 make baseline
 ```
 
-The committed submodule revision makes deployments reproducible. Changes to testcase
-contents change the catalog fingerprint, so submissions must run again against that catalog.
+`make up` refreshes the configured test commit and recreates the API and worker with that
+commit. The submit panel shows the full commit hash. Commit the updated submodule pointer
+when reviewing the repository change. Changes to testcase contents or the test repository
+commit invalidate old passes and scores; administrators can rejudge individual runs or queue
+each student's most recent accepted run from **Manage**. Rejudges use the original resolved
+student source commit. Old runs remain available for inspection but do not count as grades.
 
 ## Optimization leaderboard
 
@@ -78,9 +80,9 @@ score      = exp(sum(log(ratio_i)) / number_of_optimization_testcases)
 Each testcase has equal weight in the geometric mean. `1.0` matches the baseline;
 `2.0` means a geometric mean baseline-to-submission cycle ratio of 2 (half the cycles
 if every testcase has that ratio); `0.5` means twice the cycles in that same case.
-Scores have no cap. Failed, incomplete, cancelled, voided, older-catalog, and ownerless legacy submissions
+Scores have no cap. Failed, incomplete, cancelled, voided, older-catalog, older-test-commit, and ownerless legacy submissions
 do not rank. Accepted submission details also show the score and testcase breakdown.
-Existing results use this formula immediately; no rejudge or baseline regeneration is needed.
+Results on the current test commit use this formula immediately when a matching baseline exists.
 
 After building images and starting the judge, generate the baseline:
 
@@ -110,9 +112,10 @@ Rust version, image IDs, source fingerprint, and catalog fingerprint are also sa
 docker compose cp api:/data/optimization-baseline.json ./data/optimization-baseline.json
 ```
 
-Existing accepted submissions receive scores immediately when a matching baseline is
-activated. Regenerate after changing the catalog, reference compiler, or runtime. A
-catalog mismatch disables scoring until a new baseline and matching submissions exist.
+Existing accepted submissions on the current test commit receive scores immediately when a
+matching baseline is activated. Regenerate after changing the catalog, reference compiler,
+or runtime. A catalog or test commit mismatch disables scoring until a new baseline and
+matching submissions exist.
 If the REIMU image or runtime configuration changes, rerun submissions as well; historical
 submissions record the catalog version but do not record the runtime image they used.
 
@@ -564,6 +567,8 @@ POST requests other than login require `X-CSRF-Token`, returned by login and `/a
 | POST | `/api/auth/password` | Change password; revoke all sessions |
 | GET | `/api/catalog` | Four cumulative suites, counts, allowed Git hosts |
 | GET | `/api/catalog/summary` | Public stage counts and total for the landing page |
+| GET | `/api/progress` | Current account's passed stages and optimization score |
+| GET | `/api/admin/progress` | Every account's current passed stages and score |
 | GET | `/api/languages` | Allowed compiler implementation languages |
 | GET | `/api/health` | Worker connectivity and queue depth |
 | GET | `/api/leaderboard` | Account rankings, active baseline, and testcase cycle ratios |
@@ -573,6 +578,8 @@ POST requests other than login require `X-CSRF-Token`, returned by login and `/a
 | POST | `/api/submissions/{id}/cancel` | Cancel owned submission (or any as administrator) |
 | GET | `/api/admin/submissions` | Administrator search across all runs, with pagination and filters |
 | POST | `/api/admin/submissions/{id}/void` | Administrator marks a run Voided and excludes its score |
+| POST | `/api/admin/submissions/{id}/rejudge` | Queue a run against current tests using its resolved source commit |
+| POST | `/api/admin/rejudge-latest` | Queue each student's most recent accepted run on older tests |
 
 Submission JSON:
 
@@ -599,6 +606,16 @@ repository URL, Git ref, or commit SHA; combine the search with status, suite, a
 filters. The API accepts `q` (a literal, case-insensitive substring), `status`, `suite`,
 `language`, `limit` (1–100, default 20), and `offset`. Inspect opens the full run page with
 source details, build logs, testcase results, and any eligible optimization score.
+The Manage page also shows every student's current semantic, IR, codegen, and optimization
+passes and score. The home page shows the signed-in student's own progress. A pass of a later
+suite also counts for its earlier stages. Only complete accepted runs on the current test
+content and commit count; a score additionally requires the matching Rust baseline.
+
+Rejudge keeps the old run and creates a new queued run linked by `rejudge_of`. It pins the
+student repository ref to the original resolved source commit. Runs without a resolved source
+commit cannot be rejudged. The bulk endpoint skips those runs and reports their IDs; it skips
+students whose latest accepted run is already current and avoids duplicate pending rejudges.
+The entire batch is rejected if the queue has too few free slots.
 
 Cancel stops queued or active runs. **Void** is an administrator-only terminal action:
 it marks any run `voided`, stops active work, and removes its optimization score from the

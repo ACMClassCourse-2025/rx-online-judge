@@ -2,6 +2,8 @@
 
 import math
 
+from .catalog import STAGES
+
 OPT_LEVELS = ("0", "1", "2", "3", "s", "z")
 FORMULA = "exp(mean(log(baseline_cycles / testcase_cycles)))"
 
@@ -13,6 +15,8 @@ def optimization_cases(catalog):
 def validate_baseline(baseline, catalog):
     if baseline.get("catalog_version") != catalog.version:
         raise ValueError("The baseline belongs to a different test catalog. Regenerate it.")
+    if baseline.get("tests_commit_sha", "") != catalog.commit_sha:
+        raise ValueError("The baseline belongs to a different test commit. Regenerate it.")
     expected = optimization_cases(catalog)
     cases = baseline.get("cases", [])
     if (
@@ -44,6 +48,7 @@ def score_submission(submission, baseline, catalog):
         submission["status"] != "accepted"
         or submission["stage"] != "optimization"
         or submission["catalog_version"] != catalog.version
+        or submission.get("tests_commit_sha", "") != catalog.commit_sha
         or submission["total"] != len(expected)
         or submission["completed"] != len(expected)
         or submission["passed"] != len(expected)
@@ -94,7 +99,7 @@ def leaderboard(db, catalog, viewer):
         for case in baseline["cases"]
     ]
     best = {}
-    for submission in db.leaderboard_candidates(catalog.version):
+    for submission in db.leaderboard_candidates(catalog.version, catalog.commit_sha):
         score = score_submission(submission, baseline, catalog)
         if score is None:
             continue
@@ -123,3 +128,47 @@ def leaderboard(db, catalog, viewer):
         )
     response["items"] = rows
     return response
+
+
+def student_progress(db, catalog, owner_id=None):
+    users, runs = db.progress_rows(catalog.version, catalog.commit_sha, owner_id)
+    counts = {
+        stage: sum(case.stage in STAGES[: index + 1] for case in catalog.cases.values())
+        for index, stage in enumerate(STAGES)
+    }
+    progress = {
+        user["id"]: {
+            "user_id": user["id"],
+            "username": user["username"],
+            "is_admin": bool(user["is_admin"]),
+            "active": bool(user["active"]),
+            "stages": {stage: None for stage in STAGES},
+            "score": None,
+            "score_submission_id": None,
+        }
+        for user in users
+    }
+    for run in runs:
+        row = progress[run["owner_id"]]
+        if (
+            run["total"] != counts[run["stage"]]
+            or run["completed"] != run["total"]
+            or run["passed"] != run["total"]
+        ):
+            continue
+        for stage in STAGES[: STAGES.index(run["stage"]) + 1]:
+            if row["stages"][stage] is None:
+                row["stages"][stage] = run["id"]
+    baseline = db.baseline()
+    if baseline_status(baseline, catalog) == "ready":
+        for submission in db.leaderboard_candidates(
+            catalog.version, catalog.commit_sha, owner_id, active_only=False
+        ):
+            score = score_submission(submission, baseline, catalog)
+            if score is None:
+                continue
+            row = progress[submission["owner_id"]]
+            if row["score"] is None or score["score"] > row["score"]:
+                row["score"] = score["score"]
+                row["score_submission_id"] = submission["id"]
+    return list(progress.values())

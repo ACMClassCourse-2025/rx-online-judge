@@ -1,5 +1,7 @@
 import hashlib
 import json
+import re
+import subprocess
 import tomllib
 from collections import Counter
 from dataclasses import dataclass
@@ -29,9 +31,35 @@ def fixture(root: Path, directory: Path, name: str) -> Path:
     return path
 
 
+def repository_commit(root: Path) -> str:
+    for directory in (root / "official", root):
+        if not (directory / ".git").exists():
+            continue
+        try:
+            result = subprocess.run(
+                ["git", "-C", str(directory), "rev-parse", "HEAD"],
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=5,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+        if result.returncode == 0 and re.fullmatch(r"[0-9a-f]{40}", result.stdout.strip()):
+            return result.stdout.strip()
+    return ""
+
+
 class Catalog:
-    def __init__(self, root: Path):
+    def __init__(self, root: Path, commit_sha: str = ""):
         root = root.resolve()
+        self.commit_sha = commit_sha or repository_commit(root)
+        if self.commit_sha and not re.fullmatch(r"[0-9a-f]{40}", self.commit_sha):
+            raise ValueError("OJ_TESTS_COMMIT must be a full Git commit SHA")
+        if not self.commit_sha and any(
+            (directory / ".git").exists() for directory in (root / "official", root)
+        ):
+            raise ValueError("Cannot resolve test repository commit; set OJ_TESTS_COMMIT")
         self.cases: dict[str, Case] = {}
         digest = hashlib.sha256(
             b"rx-oj-catalog-v3:semantic,ir,codegen,optimization:runtime.s:clang22\0"
@@ -106,6 +134,7 @@ class Catalog:
     def public(self):
         return {
             "version": self.version,
+            "commit_sha": self.commit_sha,
             "total": len(self.cases),
             "stages": dict(Counter(c.stage for c in self.cases.values())),
             "suites": [
