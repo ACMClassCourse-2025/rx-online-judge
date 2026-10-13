@@ -1,3 +1,4 @@
+import hashlib
 import hmac
 import json
 import secrets
@@ -8,7 +9,7 @@ from pathlib import Path
 from typing import Annotated, Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
-from fastapi.responses import FileResponse
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -333,11 +334,24 @@ def create_app(settings: Settings | None = None):
         return app.state.db.get(submission_id, owner_id=visibility(user))
 
     static = Path(__file__).parent / "static"
+    assets = sorted(
+        path for path in static.rglob("*") if path.is_file() and path.name != "index.html"
+    )
+    digest = hashlib.sha256()
+    index_html = (static / "index.html").read_text()
+    for asset in assets:
+        relative_path = asset.relative_to(static).as_posix()
+        digest.update(relative_path.encode())
+        digest.update(asset.read_bytes())
+    asset_version = digest.hexdigest()[:12]
+    for asset in assets:
+        url = f"/static/{asset.relative_to(static).as_posix()}"
+        index_html = index_html.replace(f'"{url}"', f'"{url}?v={asset_version}"')
     app.mount("/static", StaticFiles(directory=static), name="static")
 
     @app.get("/", include_in_schema=False)
     def index():
-        return FileResponse(static / "index.html")
+        return HTMLResponse(index_html, headers={"Cache-Control": "no-store"})
 
     return app
 

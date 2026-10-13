@@ -1,4 +1,5 @@
 import json
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
@@ -43,6 +44,19 @@ def test_catalog_summary_is_public_before_and_after_logout(settings, accounts, s
         assert client.post("/api/auth/logout").status_code == 200
         assert client.get("/api/catalog/summary").json() == expected
         assert client.get("/api/catalog").status_code == 401
+
+
+def test_index_uses_versioned_static_assets(settings):
+    with TestClient(create_app(settings)) as client:
+        response = client.get("/")
+        assert response.status_code == 200
+        assert response.headers["cache-control"] == "no-store"
+        versions = re.findall(r"/static/(?:app|manage)\.js\?v=([a-f0-9]{12})", response.text)
+        assert len(versions) == 2
+        assert versions[0] == versions[1]
+        assert f"/static/style.css?v={versions[0]}" in response.text
+        assert f"/static/run.js?v={versions[0]}" in response.text
+        assert client.get(f"/static/app.js?v={versions[0]}").status_code == 200
 
 
 def test_api_submission_validation_and_cancel(settings, accounts, sign_in):
